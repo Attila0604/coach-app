@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
 
 export default async function CustomersPage() {
@@ -16,7 +17,9 @@ export default async function CustomersPage() {
   const { data: customers } = coach
     ? await supabase
         .from("customers")
-        .select("id, first_name, username, status, telegram_chat_id, created_at")
+        .select(
+          "id, first_name, telegram_username, status, telegram_chat_id, created_at"
+        )
         .eq("coach_id", coach.id)
         .order("created_at", { ascending: false })
     : { data: [] };
@@ -41,23 +44,24 @@ export default async function CustomersPage() {
             <span>Chat-ID</span>
           </div>
           {list.map((c) => (
-            <div
+            <Link
               key={c.id}
-              className="grid grid-cols-[1fr_auto_auto] gap-4 px-5 py-4 border-b border-white/[0.04] last:border-0 items-center hover:bg-white/[0.02] transition"
+              href={`/coach/customers/${c.id}`}
+              className="grid grid-cols-[1fr_auto_auto] gap-4 px-5 py-4 border-b border-white/[0.04] last:border-0 items-center hover:bg-white/[0.04] transition cursor-pointer"
             >
               <div>
                 <p className="text-white font-medium">
-                  {c.first_name || c.username || "Kunde"}
+                  {c.first_name || c.telegram_username || "Kunde"}
                 </p>
-                {c.username && c.first_name && (
-                  <p className="text-xs text-white/40">@{c.username}</p>
+                {c.telegram_username && c.first_name && (
+                  <p className="text-xs text-white/40">@{c.telegram_username}</p>
                 )}
               </div>
               <StatusBadge status={c.status} />
               <span className="text-xs text-white/40 tabular-nums">
                 {c.telegram_chat_id}
               </span>
-            </div>
+            </Link>
           ))}
         </div>
       )}
