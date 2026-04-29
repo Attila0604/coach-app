@@ -20,7 +20,7 @@ export function createClient() {
               cookieStore.set(name, value, options)
             );
           } catch {
-            // Ignored — Server Component context, middleware will refresh
+            // Server Component context — ignored, middleware refreshes
           }
         },
       },
