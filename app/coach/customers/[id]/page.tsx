@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase-server";
+import {
+  KcalLast7Chart,
+  StreakHeatmap,
+  MacroBreakdown,
+  WeightProgress,
+} from "./charts";
 
 const GOAL_LABELS: Record<string, string> = {
   endurance: "Ausdauer",
@@ -47,6 +53,10 @@ function formatNumber(n: number | null | undefined): string {
   return new Intl.NumberFormat("de-DE").format(Math.round(Number(n)));
 }
 
+function isoDay(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
 type Params = { id: string };
 
 export default async function CustomerDetailPage({
@@ -60,7 +70,6 @@ export default async function CustomerDetailPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Load coach record
   const { data: coach } = await supabase
     .from("coaches")
     .select("id")
@@ -69,7 +78,6 @@ export default async function CustomerDetailPage({
 
   if (!coach) notFound();
 
-  // Load customer (RLS already filters to own coach, but we double-check)
   const { data: customer } = await supabase
     .from("customers")
     .select(
@@ -81,26 +89,29 @@ export default async function CustomerDetailPage({
 
   if (!customer) notFound();
 
-  // Load profile
   const { data: profile } = await supabase
     .from("customer_profiles")
     .select("*")
     .eq("customer_id", params.id)
     .maybeSingle();
 
-  // Load recent logs
+  // Load logs for last 30 days for charts + recent display
+  const since = new Date();
+  since.setDate(since.getDate() - 29); // 30 days incl. today
+  since.setHours(0, 0, 0, 0);
+
   const { data: logsRaw } = await supabase
     .from("food_logs")
     .select(
       "id, logged_at, meal_type, raw_description, total_kcal, protein_g, carbs_g, fat_g"
     )
     .eq("customer_id", params.id)
-    .order("logged_at", { ascending: false })
-    .limit(10);
+    .gte("logged_at", since.toISOString())
+    .order("logged_at", { ascending: false });
 
-  const logs = logsRaw ?? [];
+  const logs30 = logsRaw ?? [];
+  const recentLogs = logs30.slice(0, 10);
 
-  // Load recent messages
   const { data: msgsRaw } = await supabase
     .from("messages")
     .select("id, direction, content, agent_name, created_at")
@@ -110,23 +121,71 @@ export default async function CustomerDetailPage({
 
   const messages = msgsRaw ?? [];
 
-  // Today's stats
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayLogs = logs.filter(
-    (l) => l.logged_at && new Date(l.logged_at) >= today
+  // Build daily aggregation for last 30 days (every day, even empty)
+  const dailyMap = new Map<
+    string,
+    { kcal: number; logCount: number; protein: number; carbs: number; fat: number }
+  >();
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(since);
+    d.setDate(since.getDate() + i);
+    dailyMap.set(isoDay(d), {
+      kcal: 0,
+      logCount: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+    });
+  }
+  for (const log of logs30) {
+    if (!log.logged_at) continue;
+    const key = isoDay(new Date(log.logged_at));
+    const day = dailyMap.get(key);
+    if (!day) continue;
+    day.kcal += log.total_kcal ?? 0;
+    day.logCount += 1;
+    day.protein += Number(log.protein_g) || 0;
+    day.carbs += Number(log.carbs_g) || 0;
+    day.fat += Number(log.fat_g) || 0;
+  }
+
+  const days30 = Array.from(dailyMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, vals]) => ({
+      date,
+      kcal: vals.kcal,
+      logCount: vals.logCount,
+    }));
+
+  const days7 = days30.slice(-7);
+
+  // Macro totals last 7 days
+  const macro7 = days30.slice(-7).reduce(
+    (acc, d) => {
+      const day = dailyMap.get(d.date)!;
+      acc.protein += day.protein;
+      acc.carbs += day.carbs;
+      acc.fat += day.fat;
+      return acc;
+    },
+    { protein: 0, carbs: 0, fat: 0 }
   );
-  const todayKcal = todayLogs.reduce(
-    (sum, l) => sum + (l.total_kcal ?? 0),
-    0
-  );
+
+  // Today stats
+  const todayKey = isoDay(new Date());
+  const today = dailyMap.get(todayKey) ?? {
+    kcal: 0,
+    logCount: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+  };
 
   const displayName =
     customer.first_name || customer.telegram_username || "Kunde";
 
   return (
     <div>
-      {/* Back nav */}
       <Link
         href="/coach/customers"
         className="inline-flex items-center gap-2 text-sm text-white/55 hover:text-white mb-6 transition"
@@ -135,7 +194,6 @@ export default async function CustomerDetailPage({
         <span>Zurück zur Kundenliste</span>
       </Link>
 
-      {/* Header */}
       <div className="flex items-start justify-between gap-6 mb-10 flex-wrap">
         <div>
           <p className="text-xs uppercase tracking-[0.18em] text-gold mb-3">
@@ -157,22 +215,19 @@ export default async function CustomerDetailPage({
         <StatusBadge status={customer.status} />
       </div>
 
-      {/* Top stats row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
         <StatCard
           label="Heute geloggt"
-          value={`${todayLogs.length}`}
-          subline={`${formatNumber(todayKcal)} kcal`}
+          value={`${today.logCount}`}
+          subline={`${formatNumber(today.kcal)} kcal`}
           accent="gold"
         />
         <StatCard
-          label="Logs (zuletzt)"
-          value={`${logs.length}`}
-          subline={
-            logs.length > 0 && logs[0].logged_at
-              ? `Letzter: ${formatDateTime(logs[0].logged_at)}`
-              : "Noch keine Logs"
-          }
+          label="7 Tage"
+          value={`${days7.reduce((s, d) => s + d.logCount, 0)}`}
+          subline={`Logs · ${formatNumber(
+            Math.round(days7.reduce((s, d) => s + d.kcal, 0) / 7)
+          )} kcal Ø`}
           accent="green"
         />
         <StatCard
@@ -187,9 +242,27 @@ export default async function CustomerDetailPage({
         />
       </div>
 
-      {/* Two-column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Profile */}
+      {/* === NEW: Charts section === */}
+      <Section title="Verlauf">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <KcalLast7Chart
+            data={days7}
+            target={profile?.daily_kcal_target ?? null}
+          />
+          <MacroBreakdown
+            protein={macro7.protein}
+            carbs={macro7.carbs}
+            fat={macro7.fat}
+          />
+          <StreakHeatmap data={days30} />
+          <WeightProgress
+            start={profile?.weight_start_kg ?? null}
+            target={profile?.weight_target_kg ?? null}
+          />
+        </div>
+      </Section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
         <Section title="Profil">
           {profile ? (
             <dl className="space-y-3 text-sm">
@@ -239,7 +312,6 @@ export default async function CustomerDetailPage({
           )}
         </Section>
 
-        {/* Targets */}
         <Section title="Tagesziele">
           {profile && profile.daily_kcal_target ? (
             <div className="space-y-5">
@@ -281,13 +353,12 @@ export default async function CustomerDetailPage({
           )}
         </Section>
 
-        {/* Recent food logs */}
         <Section title="Letzte Mahlzeiten">
-          {logs.length === 0 ? (
+          {recentLogs.length === 0 ? (
             <p className="text-sm text-white/45">Noch keine Logs.</p>
           ) : (
             <ul className="space-y-3">
-              {logs.map((l) => (
+              {recentLogs.map((l) => (
                 <li
                   key={l.id}
                   className="bg-white/[0.025] rounded-xl px-4 py-3 hover:bg-white/[0.04] transition"
@@ -321,7 +392,6 @@ export default async function CustomerDetailPage({
           )}
         </Section>
 
-        {/* Recent messages */}
         <Section title="Letzte Nachrichten">
           {messages.length === 0 ? (
             <p className="text-sm text-white/45">Noch keine Nachrichten.</p>
