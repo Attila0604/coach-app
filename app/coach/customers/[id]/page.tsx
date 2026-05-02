@@ -7,6 +7,11 @@ import {
   MacroBreakdown,
   WeightProgress,
 } from "./charts";
+import { ProgressRing } from "@/components/ui/ProgressRing";
+import { MacroBar } from "@/components/ui/MacroBar";
+import { StatStrip, StatCell } from "@/components/ui/StatStrip";
+import { MealRow } from "@/components/ui/MealRow";
+import { MessageRow } from "@/components/ui/MessageRow";
 
 const GOAL_LABELS: Record<string, string> = {
   endurance: "Ausdauer",
@@ -22,6 +27,13 @@ const GOAL_LABELS: Record<string, string> = {
   health: "Gesundheit",
 };
 
+const STATUS_LABELS: Record<string, string> = {
+  active: "Aktiv",
+  intake: "Onboarding",
+  paused: "Pausiert",
+  archived: "Archiviert",
+};
+
 function labelGoal(g: string | null): string {
   if (!g) return "—";
   return GOAL_LABELS[g.toLowerCase()] ?? g;
@@ -29,22 +41,10 @@ function labelGoal(g: string | null): string {
 
 function formatDate(d: string | null): string {
   if (!d) return "—";
-  const date = new Date(d);
-  return date.toLocaleDateString("de-DE", {
+  return new Date(d).toLocaleDateString("de-DE", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
-  });
-}
-
-function formatDateTime(d: string | null): string {
-  if (!d) return "—";
-  const date = new Date(d);
-  return date.toLocaleString("de-DE", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
   });
 }
 
@@ -55,6 +55,18 @@ function formatNumber(n: number | null | undefined): string {
 
 function isoDay(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+
+// Compute streak: consecutive days (counting backwards from today) with logCount > 0
+function computeStreak(
+  days30: Array<{ date: string; logCount: number }>
+): number {
+  let streak = 0;
+  for (let i = days30.length - 1; i >= 0; i--) {
+    if (days30[i].logCount > 0) streak++;
+    else break;
+  }
+  return streak;
 }
 
 type Params = { id: string };
@@ -95,9 +107,8 @@ export default async function CustomerDetailPage({
     .eq("customer_id", params.id)
     .maybeSingle();
 
-  // Load logs for last 30 days for charts + recent display
   const since = new Date();
-  since.setDate(since.getDate() - 29); // 30 days incl. today
+  since.setDate(since.getDate() - 29);
   since.setHours(0, 0, 0, 0);
 
   const { data: logsRaw } = await supabase
@@ -110,21 +121,26 @@ export default async function CustomerDetailPage({
     .order("logged_at", { ascending: false });
 
   const logs30 = logsRaw ?? [];
-  const recentLogs = logs30.slice(0, 10);
+  const recentLogs = logs30.slice(0, 8);
 
   const { data: msgsRaw } = await supabase
     .from("messages")
     .select("id, direction, content, agent_name, created_at")
     .eq("customer_id", params.id)
     .order("created_at", { ascending: false })
-    .limit(10);
+    .limit(8);
 
   const messages = msgsRaw ?? [];
 
-  // Build daily aggregation for last 30 days (every day, even empty)
   const dailyMap = new Map<
     string,
-    { kcal: number; logCount: number; protein: number; carbs: number; fat: number }
+    {
+      kcal: number;
+      logCount: number;
+      protein: number;
+      carbs: number;
+      fat: number;
+    }
   >();
   for (let i = 0; i < 30; i++) {
     const d = new Date(since);
@@ -159,7 +175,6 @@ export default async function CustomerDetailPage({
 
   const days7 = days30.slice(-7);
 
-  // Macro totals last 7 days
   const macro7 = days30.slice(-7).reduce(
     (acc, d) => {
       const day = dailyMap.get(d.date)!;
@@ -171,7 +186,6 @@ export default async function CustomerDetailPage({
     { protein: 0, carbs: 0, fat: 0 }
   );
 
-  // Today stats
   const todayKey = isoDay(new Date());
   const today = dailyMap.get(todayKey) ?? {
     kcal: 0,
@@ -181,32 +195,46 @@ export default async function CustomerDetailPage({
     fat: 0,
   };
 
+  const streak = computeStreak(days30);
+  const avg7 = Math.round(
+    days7.reduce((s, d) => s + d.kcal, 0) / 7
+  );
+
+  const weightDelta =
+    profile?.weight_start_kg != null && profile?.weight_target_kg != null
+      ? Number(profile.weight_target_kg) - Number(profile.weight_start_kg)
+      : null;
+
   const displayName =
     customer.first_name || customer.telegram_username || "Kunde";
 
   return (
     <div>
+      {/* === Back link === */}
       <Link
         href="/coach/customers"
-        className="inline-flex items-center gap-2 text-sm text-white/55 hover:text-white mb-6 transition"
+        className="inline-flex items-center gap-2 text-xs tracking-capsTight uppercase text-bone-muted hover:text-bone mb-8 transition"
       >
         <span>←</span>
         <span>Zurück zur Kundenliste</span>
       </Link>
 
+      {/* === Header === */}
       <div className="flex items-start justify-between gap-6 mb-10 flex-wrap">
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-gold mb-3">
+          <p className="text-[9px] tracking-caps uppercase text-gold font-medium mb-3">
             Kunde
           </p>
-          <h1 className="font-serif text-4xl text-white mb-2">{displayName}</h1>
-          <div className="flex items-center gap-3 text-sm text-white/55 flex-wrap">
+          <h1 className="font-serif text-5xl text-bone leading-tight mb-3">
+            {displayName}
+          </h1>
+          <div className="flex items-center gap-3 text-xs text-bone-muted flex-wrap">
             {customer.telegram_username && (
               <span>@{customer.telegram_username}</span>
             )}
-            <span className="w-1 h-1 rounded-full bg-white/20" />
+            <span className="w-1 h-1 rounded-full bg-white/15" />
             <span>seit {formatDate(customer.created_at)}</span>
-            <span className="w-1 h-1 rounded-full bg-white/20" />
+            <span className="w-1 h-1 rounded-full bg-white/15" />
             <span className="tabular-nums">
               Telegram {customer.telegram_chat_id}
             </span>
@@ -215,35 +243,53 @@ export default async function CustomerDetailPage({
         <StatusBadge status={customer.status} />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
-        <StatCard
-          label="Heute geloggt"
-          value={`${today.logCount}`}
-          subline={`${formatNumber(today.kcal)} kcal`}
-          accent="gold"
+      {/* === Hero: ring + macros === */}
+      <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8 md:gap-12 items-center py-10 border-y border-white/[0.06] mb-0">
+        <ProgressRing
+          value={today.kcal}
+          goal={profile?.daily_kcal_target ?? null}
+          label="HEUTE"
+          unit="kcal"
         />
-        <StatCard
-          label="7 Tage"
-          value={`${days7.reduce((s, d) => s + d.logCount, 0)}`}
-          subline={`Logs · ${formatNumber(
-            Math.round(days7.reduce((s, d) => s + d.kcal, 0) / 7)
-          )} kcal Ø`}
-          accent="green"
-        />
-        <StatCard
-          label="Status"
-          value={customer.status ?? "—"}
-          subline={
-            customer.onboarded_at
-              ? `Onboarded ${formatDate(customer.onboarded_at)}`
-              : "Noch nicht onboarded"
-          }
-          accent="neutral"
-        />
+        <div className="flex flex-col gap-5 w-full">
+          <MacroBar
+            label="Protein"
+            value={today.protein}
+            goal={profile?.protein_target_g ?? null}
+            variant="gold"
+          />
+          <MacroBar
+            label="Kohlenhydrate"
+            value={today.carbs}
+            goal={profile?.carbs_target_g ?? null}
+            variant="soft"
+          />
+          <MacroBar
+            label="Fett"
+            value={today.fat}
+            goal={profile?.fat_target_g ?? null}
+            variant="deep"
+          />
+        </div>
       </div>
 
-      {/* === NEW: Charts section === */}
-      <Section title="Verlauf">
+      {/* === Stat strip === */}
+      <StatStrip>
+        <StatCell value={streak} label="Tage Streak" accent />
+        <StatCell value={avg7} label="7-Tage Ø kcal" />
+        <StatCell
+          value={
+            weightDelta != null
+              ? (weightDelta > 0 ? "+" : "") + weightDelta.toFixed(1)
+              : "—"
+          }
+          label="Ziel-Delta"
+          unit={weightDelta != null ? "kg" : undefined}
+        />
+      </StatStrip>
+
+      {/* === Charts === */}
+      <Section title="Verlauf · 30 Tage" topMargin>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <KcalLast7Chart
             data={days7}
@@ -262,186 +308,158 @@ export default async function CustomerDetailPage({
         </div>
       </Section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        <Section title="Profil">
+      {/* === Two-column body === */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-px bg-white/[0.06] mt-12">
+        {/* Profile */}
+        <Panel title="Profil">
           {profile ? (
-            <dl className="space-y-3 text-sm">
-              <Row label="Alter">{profile.age ?? "—"}</Row>
-              <Row label="Geschlecht">{profile.gender ?? "—"}</Row>
-              <Row label="Größe">
+            <dl className="divide-y divide-white/[0.06]">
+              <ProfileRow label="Alter">{profile.age ?? "—"}</ProfileRow>
+              <ProfileRow label="Geschlecht">
+                {profile.gender ?? "—"}
+              </ProfileRow>
+              <ProfileRow label="Größe">
                 {profile.height_cm ? `${profile.height_cm} cm` : "—"}
-              </Row>
-              <Row label="Gewicht">
+              </ProfileRow>
+              <ProfileRow label="Gewicht">
                 {profile.weight_start_kg
                   ? `${profile.weight_start_kg} kg`
                   : "—"}
                 {profile.weight_target_kg ? (
                   <>
-                    {" "}
-                    →{" "}
+                    <span className="mx-2 text-bone-muted">→</span>
                     <span className="text-gold-soft">
                       {profile.weight_target_kg} kg
                     </span>
                   </>
                 ) : null}
-              </Row>
-              <Row label="Ziel">{labelGoal(profile.goal)}</Row>
-              <Row label="Erfahrung">{profile.experience_level ?? "—"}</Row>
-              <Row label="Equipment">{profile.equipment ?? "—"}</Row>
-              <Row label="Allergien">
+              </ProfileRow>
+              <ProfileRow label="Ziel">{labelGoal(profile.goal)}</ProfileRow>
+              <ProfileRow label="Erfahrung">
+                {profile.experience_level ?? "—"}
+              </ProfileRow>
+              <ProfileRow label="Equipment">
+                {profile.equipment ?? "—"}
+              </ProfileRow>
+              <ProfileRow label="Allergien">
                 {profile.allergies && profile.allergies.length > 0
                   ? profile.allergies.join(", ")
                   : "Keine"}
-              </Row>
-              <Row label="Vorlieben">
-                {profile.food_preferences &&
-                profile.food_preferences.length > 0
+              </ProfileRow>
+              <ProfileRow label="Vorlieben">
+                {profile.food_preferences && profile.food_preferences.length > 0
                   ? profile.food_preferences.join(", ")
                   : "—"}
-              </Row>
+              </ProfileRow>
               {profile.notes && (
-                <Row label="Notizen">
-                  <span className="text-white/70 italic">{profile.notes}</span>
-                </Row>
+                <ProfileRow label="Notizen">
+                  <span className="italic text-bone-muted">
+                    {profile.notes}
+                  </span>
+                </ProfileRow>
               )}
             </dl>
           ) : (
-            <p className="text-sm text-white/45">
-              Noch kein Profil — Intake möglicherweise nicht abgeschlossen.
-            </p>
+            <Empty>Noch kein Profil — Intake nicht abgeschlossen.</Empty>
           )}
-        </Section>
+        </Panel>
 
-        <Section title="Tagesziele">
+        {/* Targets */}
+        <Panel title="Tagesziele">
           {profile && profile.daily_kcal_target ? (
-            <div className="space-y-5">
-              <div className="bg-gradient-to-br from-gold/15 to-gold/5 border border-gold/25 rounded-2xl p-5">
-                <p className="text-xs uppercase tracking-wider text-gold/80 mb-2">
+            <div className="space-y-7">
+              <div>
+                <p className="text-[9px] tracking-caps uppercase text-gold font-medium mb-2">
                   Kalorien
                 </p>
-                <p className="font-serif text-3xl text-white tabular-nums">
+                <p className="font-serif text-4xl text-bone tabular-nums leading-none">
                   {formatNumber(profile.daily_kcal_target)}
-                  <span className="text-sm text-white/45 ml-2 font-sans">
+                  <span className="text-sm text-bone-muted ml-2 font-sans">
                     kcal/Tag
                   </span>
                 </p>
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                <Macro
+              <div className="grid grid-cols-3 gap-px bg-white/[0.06]">
+                <TargetCell
                   label="Protein"
                   value={profile.protein_target_g}
-                  color="green"
                 />
-                <Macro
+                <TargetCell
                   label="Carbs"
                   value={profile.carbs_target_g}
-                  color="gold"
                 />
-                <Macro label="Fett" value={profile.fat_target_g} color="rose" />
+                <TargetCell
+                  label="Fett"
+                  value={profile.fat_target_g}
+                />
               </div>
-              {profile.updated_at && (
-                <p className="text-xs text-white/35 pt-2">
-                  zuletzt aktualisiert: {formatDateTime(profile.updated_at)}
-                </p>
-              )}
             </div>
           ) : (
-            <p className="text-sm text-white/45">
-              Keine Tagesziele gesetzt. (Goal-Editor kommt in einer späteren
-              Etappe.)
-            </p>
+            <Empty>
+              Keine Tagesziele gesetzt. Goal-Editor kommt in einer späteren Etappe.
+            </Empty>
           )}
-        </Section>
+        </Panel>
 
-        <Section title="Letzte Mahlzeiten">
+        {/* Recent meals */}
+        <Panel title={`Letzte Mahlzeiten · ${recentLogs.length}`}>
           {recentLogs.length === 0 ? (
-            <p className="text-sm text-white/45">Noch keine Logs.</p>
+            <Empty>Noch keine Logs.</Empty>
           ) : (
-            <ul className="space-y-3">
+            <div>
               {recentLogs.map((l) => (
-                <li
+                <MealRow
                   key={l.id}
-                  className="bg-white/[0.025] rounded-xl px-4 py-3 hover:bg-white/[0.04] transition"
-                >
-                  <div className="flex items-baseline justify-between gap-3 mb-1">
-                    <span className="text-xs text-gold-soft tabular-nums">
-                      {formatDateTime(l.logged_at)}
-                    </span>
-                    <span className="text-sm text-white tabular-nums font-medium">
-                      {formatNumber(l.total_kcal)} kcal
-                    </span>
-                  </div>
-                  {l.meal_type && (
-                    <p className="text-xs uppercase tracking-wider text-white/45 mb-1">
-                      {l.meal_type}
-                    </p>
-                  )}
-                  <p className="text-sm text-white/85 leading-snug">
-                    {l.raw_description ?? "—"}
-                  </p>
-                  {(l.protein_g || l.carbs_g || l.fat_g) && (
-                    <p className="text-xs text-white/40 mt-2 tabular-nums">
-                      P {formatNumber(Number(l.protein_g))}g · C{" "}
-                      {formatNumber(Number(l.carbs_g))}g · F{" "}
-                      {formatNumber(Number(l.fat_g))}g
-                    </p>
-                  )}
-                </li>
+                  type={l.meal_type}
+                  description={l.raw_description}
+                  protein={l.protein_g != null ? Number(l.protein_g) : null}
+                  carbs={l.carbs_g != null ? Number(l.carbs_g) : null}
+                  fat={l.fat_g != null ? Number(l.fat_g) : null}
+                  kcal={l.total_kcal}
+                  loggedAt={l.logged_at}
+                />
               ))}
-            </ul>
+            </div>
           )}
-        </Section>
+        </Panel>
 
-        <Section title="Letzte Nachrichten">
+        {/* Recent messages */}
+        <Panel title={`Letzte Nachrichten · ${messages.length}`}>
           {messages.length === 0 ? (
-            <p className="text-sm text-white/45">Noch keine Nachrichten.</p>
+            <Empty>Noch keine Nachrichten.</Empty>
           ) : (
-            <ul className="space-y-2">
+            <div>
               {messages.map((m) => (
-                <li
+                <MessageRow
                   key={m.id}
-                  className="bg-white/[0.025] rounded-xl px-4 py-3"
-                >
-                  <div className="flex items-baseline justify-between gap-2 mb-1">
-                    <span className="text-xs uppercase tracking-wider text-white/40">
-                      {m.direction === "outbound"
-                        ? "Bot →"
-                        : m.direction === "inbound"
-                        ? "← Kunde"
-                        : m.direction ?? "—"}
-                    </span>
-                    <span className="text-xs text-white/35 tabular-nums">
-                      {formatDateTime(m.created_at)}
-                    </span>
-                  </div>
-                  <p className="text-sm text-white/85 leading-snug whitespace-pre-wrap line-clamp-3">
-                    {m.content ?? "—"}
-                  </p>
-                  {m.agent_name && (
-                    <p className="text-[10px] uppercase tracking-wider text-white/30 mt-1">
-                      {m.agent_name}
-                    </p>
-                  )}
-                </li>
+                  direction={m.direction}
+                  content={m.content}
+                  agentName={m.agent_name}
+                  createdAt={m.created_at}
+                />
               ))}
-            </ul>
+            </div>
           )}
-        </Section>
+        </Panel>
       </div>
     </div>
   );
 }
 
+/* ============== local helpers ============== */
+
 function Section({
   title,
+  topMargin = false,
   children,
 }: {
   title: string;
+  topMargin?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-white/[0.03] border border-white/[0.07] rounded-2xl p-6">
-      <h2 className="text-xs uppercase tracking-wider text-white/45 mb-5">
+    <section className={topMargin ? "mt-12" : ""}>
+      <h2 className="text-[9px] tracking-caps uppercase text-bone-muted font-medium mb-6">
         {title}
       </h2>
       {children}
@@ -449,7 +467,24 @@ function Section({
   );
 }
 
-function Row({
+function Panel({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-ink-900 p-7">
+      <h3 className="text-[9px] tracking-caps uppercase text-bone-muted font-medium mb-5">
+        {title}
+      </h3>
+      {children}
+    </div>
+  );
+}
+
+function ProfileRow({
   label,
   children,
 }: {
@@ -457,86 +492,55 @@ function Row({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-white/[0.04] pb-2 last:border-0 last:pb-0">
-      <dt className="text-xs uppercase tracking-wider text-white/40 shrink-0">
+    <div className="flex items-baseline justify-between gap-3 py-3 first:pt-0 last:pb-0">
+      <dt className="text-[10px] tracking-capsTight uppercase text-bone-muted shrink-0 font-medium">
         {label}
       </dt>
-      <dd className="text-white/90 text-right">{children}</dd>
+      <dd className="text-bone text-sm text-right">{children}</dd>
     </div>
   );
 }
 
-function Macro({
+function TargetCell({
   label,
   value,
-  color,
 }: {
   label: string;
   value: number | null | undefined;
-  color: "green" | "gold" | "rose";
 }) {
-  const tone =
-    color === "green"
-      ? "text-emerald-300 border-emerald-400/20"
-      : color === "gold"
-      ? "text-gold-soft border-gold/20"
-      : "text-rose-300 border-rose-500/20";
-
   return (
-    <div className={`bg-white/[0.025] border rounded-xl px-3 py-3 ${tone}`}>
-      <p className="text-[10px] uppercase tracking-wider opacity-80 mb-1">
-        {label}
-      </p>
-      <p className="font-serif text-xl text-white tabular-nums">
+    <div className="bg-ink-900 px-3 py-4 text-center">
+      <p className="font-serif text-2xl text-bone tabular-nums leading-none">
         {value ?? "—"}
-        <span className="text-xs text-white/45 ml-1 font-sans">g</span>
+        {value && (
+          <span className="text-xs text-bone-muted ml-1 font-sans">g</span>
+        )}
+      </p>
+      <p className="text-[9px] tracking-capsTight uppercase text-bone-muted mt-2 font-medium">
+        {label}
       </p>
     </div>
   );
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return <p className="text-sm text-bone-muted italic">{children}</p>;
 }
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    active: "bg-emerald-400/10 text-emerald-300 border-emerald-400/20",
-    intake: "bg-gold/10 text-gold-soft border-gold/20",
-    paused: "bg-white/5 text-white/55 border-white/10",
-    archived: "bg-rose-500/10 text-rose-300 border-rose-500/20",
+    active: "border-gold/40 text-gold",
+    intake: "border-bone/30 text-bone",
+    paused: "border-bone-muted/30 text-bone-muted",
+    archived: "border-bone-faint text-bone-faint",
   };
   const style = styles[status] ?? styles.paused;
+  const label = STATUS_LABELS[status] ?? status;
   return (
     <span
-      className={`text-xs px-3 py-1.5 rounded-full border ${style} uppercase tracking-wide`}
+      className={`text-[10px] px-3 py-1.5 border ${style} tracking-caps uppercase font-medium`}
     >
-      {status}
+      {label}
     </span>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  subline,
-  accent,
-}: {
-  label: string;
-  value: string | number;
-  subline: string;
-  accent: "gold" | "green" | "neutral";
-}) {
-  const accentClass =
-    accent === "gold"
-      ? "from-gold/15 to-gold/5 border-gold/25"
-      : accent === "green"
-      ? "from-emerald-400/10 to-emerald-400/[0.02] border-emerald-400/20"
-      : "from-white/[0.04] to-white/[0.01] border-white/[0.08]";
-
-  return (
-    <div className={`bg-gradient-to-b ${accentClass} border rounded-2xl p-5`}>
-      <p className="text-xs uppercase tracking-wider text-white/55 mb-3">
-        {label}
-      </p>
-      <p className="font-serif text-3xl text-white tabular-nums">{value}</p>
-      <p className="text-xs text-white/45 mt-2">{subline}</p>
-    </div>
   );
 }
