@@ -12,6 +12,7 @@ import { MacroBar } from "@/components/ui/MacroBar";
 import { StatStrip, StatCell } from "@/components/ui/StatStrip";
 import { MealRow } from "@/components/ui/MealRow";
 import { MessageRow } from "@/components/ui/MessageRow";
+import { GoalsEditor } from "@/components/ui/GoalsEditor";
 
 const GOAL_LABELS: Record<string, string> = {
   endurance: "Ausdauer",
@@ -48,16 +49,10 @@ function formatDate(d: string | null): string {
   });
 }
 
-function formatNumber(n: number | null | undefined): string {
-  if (n === null || n === undefined) return "—";
-  return new Intl.NumberFormat("de-DE").format(Math.round(Number(n)));
-}
-
 function isoDay(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-// Compute streak: consecutive days (counting backwards from today) with logCount > 0
 function computeStreak(
   days30: Array<{ date: string; logCount: number }>
 ): number {
@@ -196,9 +191,7 @@ export default async function CustomerDetailPage({
   };
 
   const streak = computeStreak(days30);
-  const avg7 = Math.round(
-    days7.reduce((s, d) => s + d.kcal, 0) / 7
-  );
+  const avg7 = Math.round(days7.reduce((s, d) => s + d.kcal, 0) / 7);
 
   const weightDelta =
     profile?.weight_start_kg != null && profile?.weight_target_kg != null
@@ -210,7 +203,6 @@ export default async function CustomerDetailPage({
 
   return (
     <div>
-      {/* === Back link === */}
       <Link
         href="/coach/customers"
         className="inline-flex items-center gap-2 text-xs tracking-capsTight uppercase text-bone-muted hover:text-bone mb-8 transition"
@@ -219,7 +211,6 @@ export default async function CustomerDetailPage({
         <span>Zurück zur Kundenliste</span>
       </Link>
 
-      {/* === Header === */}
       <div className="flex items-start justify-between gap-6 mb-10 flex-wrap">
         <div>
           <p className="text-[9px] tracking-caps uppercase text-gold font-medium mb-3">
@@ -243,7 +234,6 @@ export default async function CustomerDetailPage({
         <StatusBadge status={customer.status} />
       </div>
 
-      {/* === Hero: ring + macros === */}
       <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8 md:gap-12 items-center py-10 border-y border-white/[0.06] mb-0">
         <ProgressRing
           value={today.kcal}
@@ -273,7 +263,6 @@ export default async function CustomerDetailPage({
         </div>
       </div>
 
-      {/* === Stat strip === */}
       <StatStrip>
         <StatCell value={streak} label="Tage Streak" accent />
         <StatCell value={avg7} label="7-Tage Ø kcal" />
@@ -288,7 +277,6 @@ export default async function CustomerDetailPage({
         />
       </StatStrip>
 
-      {/* === Charts === */}
       <Section title="Verlauf · 30 Tage" topMargin>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <KcalLast7Chart
@@ -308,9 +296,7 @@ export default async function CustomerDetailPage({
         </div>
       </Section>
 
-      {/* === Two-column body === */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-px bg-white/[0.06] mt-12">
-        {/* Profile */}
         <Panel title="Profil">
           {profile ? (
             <dl className="divide-y divide-white/[0.06]">
@@ -364,44 +350,22 @@ export default async function CustomerDetailPage({
           )}
         </Panel>
 
-        {/* Targets */}
         <Panel title="Tagesziele">
-          {profile && profile.daily_kcal_target ? (
-            <div className="space-y-7">
-              <div>
-                <p className="text-[9px] tracking-caps uppercase text-gold font-medium mb-2">
-                  Kalorien
-                </p>
-                <p className="font-serif text-4xl text-bone tabular-nums leading-none">
-                  {formatNumber(profile.daily_kcal_target)}
-                  <span className="text-sm text-bone-muted ml-2 font-sans">
-                    kcal/Tag
-                  </span>
-                </p>
-              </div>
-              <div className="grid grid-cols-3 gap-px bg-white/[0.06]">
-                <TargetCell
-                  label="Protein"
-                  value={profile.protein_target_g}
-                />
-                <TargetCell
-                  label="Carbs"
-                  value={profile.carbs_target_g}
-                />
-                <TargetCell
-                  label="Fett"
-                  value={profile.fat_target_g}
-                />
-              </div>
-            </div>
-          ) : (
-            <Empty>
-              Keine Tagesziele gesetzt. Goal-Editor kommt in einer späteren Etappe.
-            </Empty>
-          )}
+          <GoalsEditor
+            customerId={params.id}
+            profile={
+              profile
+                ? {
+                    daily_kcal_target: profile.daily_kcal_target ?? null,
+                    protein_target_g: profile.protein_target_g ?? null,
+                    carbs_target_g: profile.carbs_target_g ?? null,
+                    fat_target_g: profile.fat_target_g ?? null,
+                  }
+                : null
+            }
+          />
         </Panel>
 
-        {/* Recent meals */}
         <Panel title={`Letzte Mahlzeiten · ${recentLogs.length}`}>
           {recentLogs.length === 0 ? (
             <Empty>Noch keine Logs.</Empty>
@@ -423,7 +387,6 @@ export default async function CustomerDetailPage({
           )}
         </Panel>
 
-        {/* Recent messages */}
         <Panel title={`Letzte Nachrichten · ${messages.length}`}>
           {messages.length === 0 ? (
             <Empty>Noch keine Nachrichten.</Empty>
@@ -497,28 +460,6 @@ function ProfileRow({
         {label}
       </dt>
       <dd className="text-bone text-sm text-right">{children}</dd>
-    </div>
-  );
-}
-
-function TargetCell({
-  label,
-  value,
-}: {
-  label: string;
-  value: number | null | undefined;
-}) {
-  return (
-    <div className="bg-ink-900 px-3 py-4 text-center">
-      <p className="font-serif text-2xl text-bone tabular-nums leading-none">
-        {value ?? "—"}
-        {value && (
-          <span className="text-xs text-bone-muted ml-1 font-sans">g</span>
-        )}
-      </p>
-      <p className="text-[9px] tracking-capsTight uppercase text-bone-muted mt-2 font-medium">
-        {label}
-      </p>
     </div>
   );
 }
