@@ -1,4 +1,5 @@
 // Pure-SVG/CSS chart components. No external dependencies.
+// Premium Gold-Tone: gold/soft/deep family + bone subtleties.
 
 type DailyKcal = { date: string; kcal: number; logCount: number };
 
@@ -15,10 +16,10 @@ export function KcalLast7Chart({
   return (
     <div>
       <div className="flex items-baseline justify-between mb-4">
-        <span className="text-xs uppercase tracking-wider text-white/45">
+        <span className="text-[9px] tracking-caps uppercase text-bone-muted font-medium">
           Kalorien · 7 Tage
         </span>
-        <span className="text-xs text-white/55 tabular-nums">
+        <span className="text-[11px] text-bone-muted tabular-nums">
           Ø {avg} kcal
         </span>
       </div>
@@ -29,7 +30,7 @@ export function KcalLast7Chart({
             className="absolute left-0 right-0 border-t border-dashed border-gold/40 pointer-events-none z-0"
             style={{ bottom: `${(target / max) * 100}%` }}
           >
-            <span className="absolute -top-3 right-0 text-[9px] text-gold/60 tabular-nums bg-ink-700 px-1">
+            <span className="absolute -top-3 right-0 text-[9px] tracking-capsTight uppercase text-gold tabular-nums bg-ink-900 px-1">
               Ziel {target}
             </span>
           </div>
@@ -40,25 +41,28 @@ export function KcalLast7Chart({
           const isToday = i === data.length - 1;
           const hasData = d.kcal > 0;
           return (
-            <div key={d.date} className="flex-1 flex flex-col items-center gap-2 min-w-0">
+            <div
+              key={d.date}
+              className="flex-1 flex flex-col items-center gap-2 min-w-0"
+            >
               <div className="flex-1 w-full flex items-end justify-center">
                 {hasData ? (
                   <div
-                    className={`w-full rounded-t-md transition-all ${
+                    className={`w-full transition-all ${
                       isToday
-                        ? "bg-gradient-to-t from-gold-deep to-gold-soft"
-                        : "bg-gradient-to-t from-white/8 to-white/20"
+                        ? "bg-gold"
+                        : "bg-gold-deep/40"
                     }`}
                     style={{ height: `${Math.max(height, 3)}%` }}
                     title={`${d.kcal} kcal`}
                   />
                 ) : (
-                  <div className="w-full h-1 bg-white/[0.06] rounded-full" />
+                  <div className="w-full h-px bg-white/[0.06]" />
                 )}
               </div>
               <span
-                className={`text-[9px] uppercase tracking-wide ${
-                  isToday ? "text-gold-soft" : "text-white/35"
+                className={`text-[9px] tracking-capsTight uppercase font-medium ${
+                  isToday ? "text-gold" : "text-bone-faint"
                 }`}
               >
                 {dayLabel(d.date)}
@@ -78,13 +82,13 @@ export function StreakHeatmap({ data }: { data: DailyKcal[] }) {
   return (
     <div>
       <div className="flex items-baseline justify-between mb-4">
-        <span className="text-xs uppercase tracking-wider text-white/45">
+        <span className="text-[9px] tracking-caps uppercase text-bone-muted font-medium">
           Aktivität · 30 Tage
         </span>
-        <span className="text-xs text-white/55 tabular-nums">
+        <span className="text-[11px] text-bone-muted tabular-nums">
           {totalLogged} / {data.length} Tage
           {currentStreak > 0 && (
-            <span className="text-emerald-300 ml-2">
+            <span className="text-gold ml-2">
               🔥 {currentStreak} Streak
             </span>
           )}
@@ -99,32 +103,32 @@ export function StreakHeatmap({ data }: { data: DailyKcal[] }) {
           const intensity = Math.min(d.logCount, 4);
           const bgClass =
             intensity === 0
-              ? "bg-white/[0.04] border-white/[0.04]"
+              ? "bg-white/[0.04]"
               : intensity === 1
-              ? "bg-emerald-400/20 border-emerald-400/30"
+              ? "bg-gold/20"
               : intensity === 2
-              ? "bg-emerald-400/40 border-emerald-400/50"
+              ? "bg-gold/40"
               : intensity === 3
-              ? "bg-emerald-400/60 border-emerald-400/70"
-              : "bg-emerald-400/85 border-emerald-400";
+              ? "bg-gold/65"
+              : "bg-gold";
           return (
             <div
               key={d.date}
-              className={`aspect-square rounded-sm border ${bgClass} hover:scale-110 transition-transform`}
+              className={`aspect-square ${bgClass} hover:scale-110 transition-transform`}
               title={`${d.date}: ${d.logCount} Logs`}
             />
           );
         })}
       </div>
 
-      <div className="flex items-center gap-2 mt-3 text-[10px] text-white/35">
+      <div className="flex items-center gap-2 mt-3 text-[10px] tracking-capsTight uppercase text-bone-faint font-medium">
         <span>weniger</span>
         <div className="flex gap-1">
-          <span className="w-2.5 h-2.5 rounded-sm bg-white/[0.04] border border-white/[0.04]" />
-          <span className="w-2.5 h-2.5 rounded-sm bg-emerald-400/20 border border-emerald-400/30" />
-          <span className="w-2.5 h-2.5 rounded-sm bg-emerald-400/40 border border-emerald-400/50" />
-          <span className="w-2.5 h-2.5 rounded-sm bg-emerald-400/60 border border-emerald-400/70" />
-          <span className="w-2.5 h-2.5 rounded-sm bg-emerald-400/85 border border-emerald-400" />
+          <span className="w-2.5 h-2.5 bg-white/[0.04]" />
+          <span className="w-2.5 h-2.5 bg-gold/20" />
+          <span className="w-2.5 h-2.5 bg-gold/40" />
+          <span className="w-2.5 h-2.5 bg-gold/65" />
+          <span className="w-2.5 h-2.5 bg-gold" />
         </div>
         <span>mehr</span>
       </div>
@@ -146,11 +150,11 @@ export function MacroBreakdown({
     return (
       <div>
         <div className="flex items-baseline justify-between mb-4">
-          <span className="text-xs uppercase tracking-wider text-white/45">
+          <span className="text-[9px] tracking-caps uppercase text-bone-muted font-medium">
             Makros · 7 Tage
           </span>
         </div>
-        <p className="text-sm text-white/40">Noch keine Daten.</p>
+        <p className="text-sm text-bone-muted italic">Noch keine Daten.</p>
       </div>
     );
   }
@@ -166,17 +170,17 @@ export function MacroBreakdown({
   return (
     <div>
       <div className="flex items-baseline justify-between mb-4">
-        <span className="text-xs uppercase tracking-wider text-white/45">
+        <span className="text-[9px] tracking-caps uppercase text-bone-muted font-medium">
           Makros · 7 Tage
         </span>
-        <span className="text-xs text-white/55 tabular-nums">
+        <span className="text-[11px] text-bone-muted tabular-nums">
           {Math.round(totalKcal)} kcal gesamt
         </span>
       </div>
 
-      <div className="flex h-3 rounded-full overflow-hidden bg-white/[0.04]">
+      <div className="flex h-[3px] overflow-hidden bg-white/[0.06]">
         <div
-          className="bg-emerald-400/85"
+          className="bg-gold"
           style={{ width: `${pP}%` }}
           title={`Protein ${pP}%`}
         />
@@ -186,30 +190,30 @@ export function MacroBreakdown({
           title={`Carbs ${pC}%`}
         />
         <div
-          className="bg-rose-400/80"
+          className="bg-gold-deep"
           style={{ width: `${pF}%` }}
           title={`Fett ${pF}%`}
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mt-4">
+      <div className="grid grid-cols-3 gap-3 mt-5">
         <MacroLegend
           label="Protein"
           value={Math.round(protein)}
           pct={pP}
-          color="emerald"
+          variant="gold"
         />
         <MacroLegend
           label="Carbs"
           value={Math.round(carbs)}
           pct={pC}
-          color="gold"
+          variant="soft"
         />
         <MacroLegend
           label="Fett"
           value={Math.round(fat)}
           pct={pF}
-          color="rose"
+          variant="deep"
         />
       </div>
     </div>
@@ -220,30 +224,31 @@ function MacroLegend({
   label,
   value,
   pct,
-  color,
+  variant,
 }: {
   label: string;
   value: number;
   pct: number;
-  color: "emerald" | "gold" | "rose";
+  variant: "gold" | "soft" | "deep";
 }) {
-  const dot =
-    color === "emerald"
-      ? "bg-emerald-400/85"
-      : color === "gold"
-      ? "bg-gold-soft"
-      : "bg-rose-400/80";
+  const dotClass = {
+    gold: "bg-gold",
+    soft: "bg-gold-soft",
+    deep: "bg-gold-deep",
+  }[variant];
+
   return (
     <div className="flex items-baseline gap-2">
-      <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass}`} />
       <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-wider text-white/45">
+        <div className="text-[9px] tracking-capsTight uppercase text-bone-muted font-medium">
           {label}
         </div>
-        <div className="text-sm text-white tabular-nums">
-          {value}g
-          <span className="text-white/40 ml-1">·</span>
-          <span className="text-white/55 ml-1">{pct}%</span>
+        <div className="text-sm text-bone tabular-nums">
+          {value}
+          <span className="text-bone-muted ml-0.5">g</span>
+          <span className="text-bone-faint mx-1.5">·</span>
+          <span className="text-bone-muted">{pct}%</span>
         </div>
       </div>
     </div>
@@ -261,11 +266,11 @@ export function WeightProgress({
     return (
       <div>
         <div className="flex items-baseline justify-between mb-4">
-          <span className="text-xs uppercase tracking-wider text-white/45">
+          <span className="text-[9px] tracking-caps uppercase text-bone-muted font-medium">
             Gewicht · Fortschritt
           </span>
         </div>
-        <p className="text-sm text-white/40">
+        <p className="text-sm text-bone-muted italic">
           Start- oder Zielgewicht fehlt im Profil.
         </p>
       </div>
@@ -279,49 +284,48 @@ export function WeightProgress({
   return (
     <div>
       <div className="flex items-baseline justify-between mb-4">
-        <span className="text-xs uppercase tracking-wider text-white/45">
+        <span className="text-[9px] tracking-caps uppercase text-bone-muted font-medium">
           Gewicht · Ziel
         </span>
-        <span className="text-xs text-white/55 tabular-nums">
+        <span className="text-[11px] text-bone-muted tabular-nums">
           {diff.toFixed(1)} kg {direction}
         </span>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-4">
         <div className="text-center">
-          <div className="text-[10px] uppercase tracking-wider text-white/40">
+          <div className="text-[9px] tracking-capsTight uppercase text-bone-muted font-medium mb-1">
             Start
           </div>
-          <div className="font-serif text-2xl text-white tabular-nums">
+          <div className="font-serif text-2xl text-bone tabular-nums leading-none">
             {start}
-            <span className="text-xs text-white/40 ml-0.5">kg</span>
+            <span className="text-xs text-bone-muted ml-0.5 font-sans">kg</span>
           </div>
         </div>
 
-        <div className="flex-1 relative h-3 bg-white/[0.04] rounded-full overflow-hidden">
+        <div className="flex-1 relative h-[3px] bg-white/[0.06]">
           <div
-            className="absolute inset-y-0 left-0 bg-gradient-to-r from-gold-deep to-gold-soft rounded-full"
+            className="absolute inset-y-0 left-0 bg-gold"
             style={{ width: "0%" }}
           />
-          <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white/55">
+          <div className="absolute inset-0 flex items-center justify-center text-[9px] tracking-capsTight uppercase text-bone-faint font-medium -translate-y-3">
             0% des Wegs
           </div>
         </div>
 
         <div className="text-center">
-          <div className="text-[10px] uppercase tracking-wider text-gold/70">
+          <div className="text-[9px] tracking-capsTight uppercase text-gold font-medium mb-1">
             Ziel
           </div>
-          <div className="font-serif text-2xl text-gold-soft tabular-nums">
+          <div className="font-serif text-2xl text-gold tabular-nums leading-none">
             {target}
-            <span className="text-xs text-white/40 ml-0.5">kg</span>
+            <span className="text-xs text-bone-muted ml-0.5 font-sans">kg</span>
           </div>
         </div>
       </div>
 
-      <p className="text-[11px] text-white/35 mt-3 text-center">
-        Sobald der Kunde sein aktuelles Gewicht loggt, wird der Fortschritt
-        sichtbar.
+      <p className="text-[10px] text-bone-faint mt-4 text-center italic">
+        Sobald der Kunde sein aktuelles Gewicht loggt, wird der Fortschritt sichtbar.
       </p>
     </div>
   );
