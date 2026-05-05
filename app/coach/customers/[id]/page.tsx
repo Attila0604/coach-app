@@ -129,7 +129,7 @@ export default async function CustomerDetailPage({
   const messages = msgsRaw ?? [];
 
   const dailyMap = new Map
-    string,
+    <string,
     {
       kcal: number;
       logCount: number;
