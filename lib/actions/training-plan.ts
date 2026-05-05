@@ -1,16 +1,12 @@
 'use server';
 
 // ============================================================================
-// Server Actions: Training Plans — V2 mit Kalender + Workflow-Helfer
+// Server Actions: Training Plans — V2.1 mit Duplizier-Dialog-Support
 // ============================================================================
 
 import { createClient } from '@/lib/supabase-server';
 import { revalidatePath } from 'next/cache';
 import type { WeightType, Weekday } from '@/lib/types/training';
-
-// ----------------------------------------------------------------------------
-// Helper: Coach-ID aus eingeloggtem User holen
-// ----------------------------------------------------------------------------
 
 async function getCoachId() {
   const supabase = createClient();
@@ -28,7 +24,7 @@ async function getCoachId() {
 }
 
 // ============================================================================
-// PLAN — anlegen / aktualisieren / löschen
+// PLAN
 // ============================================================================
 
 export async function createPlan(customerId: string) {
@@ -91,7 +87,7 @@ export async function deletePlan(planId: string, customerId: string) {
 }
 
 // ============================================================================
-// DAY — anlegen / aktualisieren / löschen / duplizieren
+// DAY
 // ============================================================================
 
 export async function addDay(planId: string, customerId: string) {
@@ -146,8 +142,15 @@ export async function deleteDay(dayId: string, customerId: string) {
   revalidatePath(`/customers/${customerId}`);
 }
 
-// Tag mit allen Übungen duplizieren
-export async function duplicateDay(dayId: string, customerId: string) {
+// Tag mit allen Übungen duplizieren — Wochentag + Uhrzeit werden vom Aufrufer gesetzt
+export async function duplicateDay(
+  dayId: string,
+  customerId: string,
+  options?: {
+    weekday?: Weekday | null;
+    time_of_day?: string | null;
+  }
+) {
   const supabase = createClient();
   
   // Quell-Tag laden
@@ -158,7 +161,7 @@ export async function duplicateDay(dayId: string, customerId: string) {
     .single();
   if (dayErr) throw dayErr;
   
-  // Höchste day_number in diesem Plan ermitteln
+  // Höchste day_number im Plan ermitteln
   const { data: existing } = await supabase
     .from('training_days')
     .select('day_number, sort_order')
@@ -169,16 +172,22 @@ export async function duplicateDay(dayId: string, customerId: string) {
   const nextNumber = (existing?.[0]?.day_number ?? 0) + 1;
   const nextSort = (existing?.[0]?.sort_order ?? -1) + 1;
   
-  // Neuen Tag anlegen (Werte vom Quell-Tag übernehmen)
+  // Wochentag + Uhrzeit: aus options ODER vom Quell-Tag übernehmen
+  const targetWeekday =
+    options?.weekday !== undefined ? options.weekday : srcDay.weekday;
+  const targetTime =
+    options?.time_of_day !== undefined ? options.time_of_day : srcDay.time_of_day;
+  
+  // Neuen Tag anlegen
   const { data: newDay, error: insErr } = await supabase
     .from('training_days')
     .insert({
       plan_id: srcDay.plan_id,
       day_number: nextNumber,
-      title: `${srcDay.title} (Kopie)`,
+      title: srcDay.title,
       subtitle: srcDay.subtitle,
-      weekday: srcDay.weekday,
-      time_of_day: srcDay.time_of_day,
+      weekday: targetWeekday,
+      time_of_day: targetTime,
       sort_order: nextSort,
     })
     .select()
@@ -209,7 +218,7 @@ export async function duplicateDay(dayId: string, customerId: string) {
 }
 
 // ============================================================================
-// EXERCISE — anlegen / aktualisieren / löschen / duplizieren / verschieben
+// EXERCISE
 // ============================================================================
 
 export async function addExercise(dayId: string, customerId: string) {
@@ -271,7 +280,6 @@ export async function deleteExercise(exerciseId: string, customerId: string) {
   revalidatePath(`/customers/${customerId}`);
 }
 
-// Übung duplizieren — Kopie kommt direkt nach dem Original
 export async function duplicateExercise(exerciseId: string, customerId: string) {
   const supabase = createClient();
   
@@ -282,7 +290,6 @@ export async function duplicateExercise(exerciseId: string, customerId: string) 
     .single();
   if (srcErr) throw srcErr;
   
-  // Alle nachfolgenden Übungen um 1 nach hinten schieben
   const { data: laterExercises } = await supabase
     .from('exercises')
     .select('id, sort_order')
@@ -299,7 +306,6 @@ export async function duplicateExercise(exerciseId: string, customerId: string) 
     }
   }
   
-  // Kopie direkt nach dem Original einfügen
   const { data: copy, error: insErr } = await supabase
     .from('exercises')
     .insert({
@@ -322,7 +328,6 @@ export async function duplicateExercise(exerciseId: string, customerId: string) 
   return copy;
 }
 
-// Übung in der Reihenfolge verschieben (direction: 'up' oder 'down')
 export async function moveExercise(
   exerciseId: string,
   customerId: string,
@@ -337,7 +342,6 @@ export async function moveExercise(
     .single();
   if (exErr) throw exErr;
   
-  // Nachbar-Übung finden (entweder direkt darüber oder darunter)
   const { data: neighbor } = await supabase
     .from('exercises')
     .select('id, sort_order')
@@ -347,12 +351,8 @@ export async function moveExercise(
     .limit(1)
     .maybeSingle();
   
-  if (!neighbor) {
-    // Schon ganz oben/unten
-    return;
-  }
+  if (!neighbor) return;
   
-  // Sort-Orders tauschen
   await supabase
     .from('exercises')
     .update({ sort_order: neighbor.sort_order })
