@@ -1,13 +1,7 @@
 'use client';
 
 // ============================================================================
-// Training Plan Editor V2 — Premium Dark + Gold Design
-// 
-// Erweiterungen ggü V1:
-//   - Plan-Startdatum
-//   - Wochentag-Pills + Uhrzeit pro Tag
-//   - Telegram-Reminder Settings (Kunde + Coach)
-//   - Tag-Duplizieren, Übung-Duplizieren, Reihenfolge ändern
+// Training Plan Editor V2.1 — mit Duplizieren-Dialog
 // ============================================================================
 
 import { useState, useTransition, useEffect } from 'react';
@@ -88,6 +82,7 @@ export default function TrainingPlanEditor({ customerId, plan }: Props) {
   const [activeDayId, setActiveDayId] = useState<string | null>(
     plan?.days?.[0]?.id ?? null
   );
+  const [duplicateTarget, setDuplicateTarget] = useState<TrainingDay | null>(null);
 
   useEffect(() => {
     if (plan && activeDayId && !plan.days.find(d => d.id === activeDayId)) {
@@ -97,7 +92,6 @@ export default function TrainingPlanEditor({ customerId, plan }: Props) {
     }
   }, [plan, activeDayId]);
 
-  // ----- Empty State -----
   if (!plan) {
     return (
       <section className="bg-[#0A0A0C] rounded-2xl border border-[#1F1E1A] p-8">
@@ -136,174 +130,322 @@ export default function TrainingPlanEditor({ customerId, plan }: Props) {
   const activeDay = plan.days.find(d => d.id === activeDayId) ?? plan.days[0];
 
   return (
-    <section className="bg-[#0A0A0C] rounded-2xl border border-[#1F1E1A] p-7 text-[#F5F2EA]">
-      {/* HEADER */}
-      <div className="flex items-start justify-between pb-5 border-b border-[#1F1E1A]">
-        <div>
-          <div className="text-[11px] text-[#5C5A55] tracking-[1.8px] uppercase">
-            Trainingsplan
+    <>
+      <section className="bg-[#0A0A0C] rounded-2xl border border-[#1F1E1A] p-7 text-[#F5F2EA]">
+        {/* HEADER */}
+        <div className="flex items-start justify-between pb-5 border-b border-[#1F1E1A]">
+          <div>
+            <div className="text-[11px] text-[#5C5A55] tracking-[1.8px] uppercase">
+              Trainingsplan
+            </div>
+            <div className="text-[22px] font-medium mt-1.5 leading-tight">
+              {plan.name}
+            </div>
           </div>
-          <div className="text-[22px] font-medium mt-1.5 leading-tight">
-            {plan.name}
+          <div className="flex items-center gap-2.5">
+            <StatusPill status={plan.status} />
           </div>
         </div>
-        <div className="flex items-center gap-2.5">
-          <StatusPill status={plan.status} />
+
+        {/* PLAN-SETTINGS */}
+        <div className="grid grid-cols-[2fr_1fr_1fr] gap-3.5 mt-5">
+          <Field label="Name">
+            <TextInput
+              initial={plan.name}
+              onSave={value =>
+                startTransition(async () => {
+                  await updatePlan(plan.id, customerId, { name: value });
+                })
+              }
+            />
+          </Field>
+          <Field label="Dauer">
+            <NumberInput
+              initial={plan.weeks}
+              min={1}
+              max={52}
+              suffix="Wochen"
+              onSave={value =>
+                startTransition(async () => {
+                  await updatePlan(plan.id, customerId, { weeks: value });
+                })
+              }
+            />
+          </Field>
+          <Field label="Aktuelle Woche">
+            <NumberInput
+              initial={plan.current_week}
+              min={1}
+              max={plan.weeks}
+              suffix={`von ${plan.weeks}`}
+              onSave={value =>
+                startTransition(async () => {
+                  await updatePlan(plan.id, customerId, { current_week: value });
+                })
+              }
+            />
+          </Field>
         </div>
-      </div>
 
-      {/* PLAN-SETTINGS — ZEILE 1: Name, Dauer, Aktuelle Woche */}
-      <div className="grid grid-cols-[2fr_1fr_1fr] gap-3.5 mt-5">
-        <Field label="Name">
-          <TextInput
-            initial={plan.name}
-            onSave={value =>
-              startTransition(async () => {
-                await updatePlan(plan.id, customerId, { name: value });
-              })
-            }
-          />
-        </Field>
-        <Field label="Dauer">
-          <NumberInput
-            initial={plan.weeks}
-            min={1}
-            max={52}
-            suffix="Wochen"
-            onSave={value =>
-              startTransition(async () => {
-                await updatePlan(plan.id, customerId, { weeks: value });
-              })
-            }
-          />
-        </Field>
-        <Field label="Aktuelle Woche">
-          <NumberInput
-            initial={plan.current_week}
-            min={1}
-            max={plan.weeks}
-            suffix={`von ${plan.weeks}`}
-            onSave={value =>
-              startTransition(async () => {
-                await updatePlan(plan.id, customerId, { current_week: value });
-              })
-            }
-          />
-        </Field>
-      </div>
+        <div className="grid grid-cols-[1fr_1.5fr] gap-3.5 mt-3.5">
+          <Field label="Startdatum">
+            <DateInput
+              initial={plan.start_date}
+              onSave={value =>
+                startTransition(async () => {
+                  await updatePlan(plan.id, customerId, { start_date: value });
+                })
+              }
+            />
+          </Field>
+          <Field label="Erinnerung">
+            <SelectInput
+              initial={plan.reminder_minutes_before}
+              options={REMINDER_OPTIONS.map(o => ({
+                value: String(o.value),
+                label: o.label,
+              }))}
+              onSave={value =>
+                startTransition(async () => {
+                  await updatePlan(plan.id, customerId, {
+                    reminder_minutes_before: Number(value),
+                  });
+                })
+              }
+            />
+          </Field>
+        </div>
 
-      {/* PLAN-SETTINGS — ZEILE 2: Startdatum + Reminder */}
-      <div className="grid grid-cols-[1fr_1.5fr] gap-3.5 mt-3.5">
-        <Field label="Startdatum">
-          <DateInput
-            initial={plan.start_date}
-            onSave={value =>
-              startTransition(async () => {
-                await updatePlan(plan.id, customerId, { start_date: value });
-              })
-            }
-          />
-        </Field>
-        <Field label="Erinnerung">
-          <SelectInput
-            initial={plan.reminder_minutes_before}
-            options={REMINDER_OPTIONS.map(o => ({
-              value: String(o.value),
-              label: o.label,
-            }))}
-            onSave={value =>
+        <div className="flex flex-wrap gap-2.5 mt-3.5">
+          <ToggleChip
+            label="Telegram-Reminder Kunde"
+            active={plan.notify_telegram}
+            onToggle={() =>
               startTransition(async () => {
                 await updatePlan(plan.id, customerId, {
-                  reminder_minutes_before: Number(value),
+                  notify_telegram: !plan.notify_telegram,
                 });
               })
             }
           />
-        </Field>
-      </div>
+          <ToggleChip
+            label="Telegram-Reminder Coach"
+            active={plan.notify_coach_telegram}
+            onToggle={() =>
+              startTransition(async () => {
+                await updatePlan(plan.id, customerId, {
+                  notify_coach_telegram: !plan.notify_coach_telegram,
+                });
+              })
+            }
+          />
+        </div>
 
-      {/* PLAN-SETTINGS — ZEILE 3: Reminder-Toggles */}
-      <div className="flex flex-wrap gap-2.5 mt-3.5">
-        <ToggleChip
-          label="Telegram-Reminder Kunde"
-          active={plan.notify_telegram}
-          onToggle={() =>
-            startTransition(async () => {
-              await updatePlan(plan.id, customerId, {
-                notify_telegram: !plan.notify_telegram,
+        {/* TAB-STRIP */}
+        <div className="flex gap-1 mt-7 pb-0 border-b border-[#1F1E1A] overflow-x-auto">
+          {plan.days.map(day => {
+            const isActive = day.id === activeDay?.id;
+            return (
+              <button
+                key={day.id}
+                onClick={() => setActiveDayId(day.id)}
+                className={`px-4 py-2.5 text-[12px] tracking-[1px] uppercase whitespace-nowrap -mb-px ${
+                  isActive
+                    ? 'text-[#D4AF6C] border-b border-[#D4AF6C]'
+                    : 'text-[#8E8B83] hover:text-[#F5F2EA]'
+                }`}
+              >
+                Tag {day.day_number} · {day.title}
+              </button>
+            );
+          })}
+          <button
+            onClick={() =>
+              startTransition(async () => {
+                const newDay = await addDay(plan.id, customerId);
+                setActiveDayId(newDay.id);
+              })
+            }
+            disabled={isPending}
+            className="px-4 py-2.5 text-[12px] tracking-[1px] uppercase text-[#5C5A55] hover:text-[#D4AF6C] flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50"
+          >
+            <PlusIcon />
+            Tag
+          </button>
+        </div>
+
+        {/* DAY-EDITOR */}
+        {activeDay && (
+          <DayEditor
+            key={activeDay.id}
+            day={activeDay}
+            customerId={customerId}
+            isPending={isPending}
+            startTransition={startTransition}
+            onDelete={() => {
+              startTransition(async () => {
+                await deleteDay(activeDay.id, customerId);
+                setActiveDayId(null);
               });
-            })
-          }
-        />
-        <ToggleChip
-          label="Telegram-Reminder Coach"
-          active={plan.notify_coach_telegram}
-          onToggle={() =>
-            startTransition(async () => {
-              await updatePlan(plan.id, customerId, {
-                notify_coach_telegram: !plan.notify_coach_telegram,
-              });
-            })
-          }
-        />
-      </div>
+            }}
+            onDuplicate={() => setDuplicateTarget(activeDay)}
+          />
+        )}
+      </section>
 
-      {/* TAB-STRIP */}
-      <div className="flex gap-1 mt-7 pb-0 border-b border-[#1F1E1A] overflow-x-auto">
-        {plan.days.map(day => {
-          const isActive = day.id === activeDay?.id;
-          return (
-            <button
-              key={day.id}
-              onClick={() => setActiveDayId(day.id)}
-              className={`px-4 py-2.5 text-[12px] tracking-[1px] uppercase whitespace-nowrap -mb-px ${
-                isActive
-                  ? 'text-[#D4AF6C] border-b border-[#D4AF6C]'
-                  : 'text-[#8E8B83] hover:text-[#F5F2EA]'
-              }`}
-            >
-              Tag {day.day_number} · {day.title}
-            </button>
-          );
-        })}
-        <button
-          onClick={() =>
-            startTransition(async () => {
-              const newDay = await addDay(plan.id, customerId);
-              setActiveDayId(newDay.id);
-            })
-          }
-          disabled={isPending}
-          className="px-4 py-2.5 text-[12px] tracking-[1px] uppercase text-[#5C5A55] hover:text-[#D4AF6C] flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50"
-        >
-          <PlusIcon />
-          Tag
-        </button>
-      </div>
-
-      {/* DAY-EDITOR */}
-      {activeDay && (
-        <DayEditor
-          key={activeDay.id}
-          day={activeDay}
+      {/* DUPLIZIEREN-DIALOG */}
+      {duplicateTarget && (
+        <DuplicateDayDialog
+          day={duplicateTarget}
           customerId={customerId}
-          isPending={isPending}
-          startTransition={startTransition}
-          onDelete={() => {
-            startTransition(async () => {
-              await deleteDay(activeDay.id, customerId);
-              setActiveDayId(null);
-            });
-          }}
-          onDuplicate={() => {
-            startTransition(async () => {
-              const newDay = await duplicateDay(activeDay.id, customerId);
-              setActiveDayId(newDay.id);
-            });
+          onClose={() => setDuplicateTarget(null)}
+          onSuccess={newDayId => {
+            setDuplicateTarget(null);
+            setActiveDayId(newDayId);
           }}
         />
       )}
-    </section>
+    </>
+  );
+}
+
+// ============================================================================
+// Duplicate Day Dialog (Modal)
+// ============================================================================
+
+function DuplicateDayDialog({
+  day,
+  customerId,
+  onClose,
+  onSuccess,
+}: {
+  day: TrainingDay;
+  customerId: string;
+  onClose: () => void;
+  onSuccess: (newDayId: string) => void;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [weekday, setWeekday] = useState<Weekday | null>(day.weekday);
+  const [timeOfDay, setTimeOfDay] = useState<string>(
+    day.time_of_day ? day.time_of_day.slice(0, 5) : ''
+  );
+
+  const handleConfirm = () => {
+    startTransition(async () => {
+      const newDay = await duplicateDay(day.id, customerId, {
+        weekday,
+        time_of_day: timeOfDay || null,
+      });
+      onSuccess(newDay.id);
+    });
+  };
+
+  // ESC zum Schließen
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-[#0A0A0C] border border-[#1F1E1A] rounded-2xl p-7 max-w-md w-full"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between mb-5">
+          <div>
+            <div className="text-[11px] text-[#5C5A55] tracking-[1.8px] uppercase">
+              Tag duplizieren
+            </div>
+            <div className="text-[18px] font-medium text-[#F5F2EA] mt-1.5">
+              {day.title}
+            </div>
+            {day.subtitle && (
+              <div className="text-[12px] text-[#8E8B83] mt-1">
+                {day.subtitle}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="text-[#5C5A55] hover:text-[#F5F2EA] p-1 -m-1"
+            aria-label="Schließen"
+          >
+            <XIcon className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Wochentag-Pills */}
+        <div className="mb-4">
+          <div className="text-[11px] text-[#5C5A55] tracking-[1.5px] uppercase mb-2">
+            Auf welchen Wochentag?
+          </div>
+          <div className="flex gap-1.5">
+            {WEEKDAYS.map(d => {
+              const isActive = weekday === d.value;
+              return (
+                <button
+                  key={d.value}
+                  onClick={() => setWeekday(isActive ? null : d.value)}
+                  className={`flex-1 py-2.5 rounded-lg text-[12px] font-medium tracking-[0.5px] uppercase transition-colors ${
+                    isActive
+                      ? 'bg-[#D4AF6C] text-[#1A1308]'
+                      : 'bg-[#131215] border border-[#1F1E1A] text-[#8E8B83] hover:border-[#2C2A24] hover:text-[#F5F2EA]'
+                  }`}
+                  title={d.long}
+                >
+                  {d.short}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Uhrzeit */}
+        <div className="mb-6">
+          <div className="text-[11px] text-[#5C5A55] tracking-[1.5px] uppercase mb-2">
+            Uhrzeit
+          </div>
+          <input
+            type="time"
+            value={timeOfDay}
+            onChange={e => setTimeOfDay(e.target.value)}
+            className="w-full bg-[#131215] border border-[#1F1E1A] rounded-lg px-3 py-2.5 text-[14px] text-[#F5F2EA] focus:border-[#D4AF6C] focus:outline-none transition-colors tabular-nums"
+          />
+        </div>
+
+        {/* Übungen-Hinweis */}
+        <div className="text-[11px] text-[#5C5A55] mb-5 flex items-center gap-2">
+          <CopyIcon className="w-3 h-3" />
+          {day.exercises.length} Übung{day.exercises.length !== 1 ? 'en' : ''} werden mitkopiert
+        </div>
+
+        {/* Actions */}
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            disabled={isPending}
+            className="px-4 py-2 text-[11px] text-[#8E8B83] uppercase tracking-[0.5px] hover:text-[#F5F2EA] disabled:opacity-50"
+          >
+            Abbrechen
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={isPending}
+            className="px-5 py-2 bg-[#D4AF6C] text-[#1A1308] text-[11px] font-medium uppercase tracking-[0.5px] rounded-md hover:bg-[#C7A862] disabled:opacity-50"
+          >
+            {isPending ? 'Dupliziert…' : 'Duplizieren'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -328,7 +470,6 @@ function DayEditor({
 }) {
   return (
     <>
-      {/* Tag-Titel + Untertitel */}
       <div className="grid grid-cols-[1fr_2fr] gap-3.5 mt-5">
         <Field label="Titel">
           <TextInput
@@ -353,7 +494,6 @@ function DayEditor({
         </Field>
       </div>
 
-      {/* Wochentag + Uhrzeit */}
       <div className="grid grid-cols-[2fr_1fr] gap-3.5 mt-3.5">
         <Field label="Wochentag">
           <WeekdayPills
@@ -377,7 +517,6 @@ function DayEditor({
         </Field>
       </div>
 
-      {/* Übungsliste Header */}
       <div className="mt-6">
         <div className="flex items-baseline justify-between mb-3">
           <div className="text-[11px] text-[#5C5A55] tracking-[1.8px] uppercase">
@@ -480,7 +619,6 @@ function ExerciseRow({
 
   return (
     <div className="flex items-center gap-3 p-3 bg-[#131215] border border-[#1F1E1A] rounded-[10px] hover:border-[#2C2A24] group">
-      {/* Move-Pfeile */}
       <div className="flex flex-col gap-0.5 -my-1">
         <button
           onClick={() =>
@@ -526,7 +664,6 @@ function ExerciseRow({
         {formatWeight(exercise.weight_kg, exercise.weight_type)}
       </span>
 
-      {/* Action-Buttons (sichtbar bei Hover) */}
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           onClick={() =>
@@ -831,7 +968,6 @@ function TimeInput({
   initial: string | null;
   onSave: (value: string | null) => void;
 }) {
-  // DB liefert "18:00:00", Input braucht "18:00"
   const initialUI = initial ? initial.slice(0, 5) : '';
   const [value, setValue] = useState(initialUI);
   return (
