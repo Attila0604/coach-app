@@ -13,6 +13,7 @@ import { StatStrip, StatCell } from "@/components/ui/StatStrip";
 import { MealRow } from "@/components/ui/MealRow";
 import { MessageRow } from "@/components/ui/MessageRow";
 import { GoalsEditor } from "@/components/ui/GoalsEditor";
+import TrainingPlanSection from "@/components/training-plan-section";
 
 const GOAL_LABELS: Record<string, string> = {
   endurance: "Ausdauer",
@@ -127,7 +128,7 @@ export default async function CustomerDetailPage({
 
   const messages = msgsRaw ?? [];
 
-  const dailyMap = new Map<
+  const dailyMap = new Map
     string,
     {
       kcal: number;
@@ -404,6 +405,10 @@ export default async function CustomerDetailPage({
             </div>
           )}
         </Panel>
+      </div>
+
+      <div className="mt-12">
+        <TrainingPlanSection customerId={params.id} />
       </div>
     </div>
   );
