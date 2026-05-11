@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase-server";
 
 export default async function CoachDashboardPage() {
@@ -7,48 +8,56 @@ export default async function CoachDashboardPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
-  // Load coach + customer counts
+  // Load coach + role
   const { data: coach } = await supabase
     .from("coaches")
-    .select("id, name")
-    .eq("user_id", user!.id)
+    .select("id, name, role")
+    .eq("user_id", user.id)
     .maybeSingle();
+
+  const isAdmin = coach?.role === "admin";
 
   let totalCustomers = 0;
   let activeCustomers = 0;
   let intakeCustomers = 0;
 
   if (coach) {
-    const { count: total } = await supabase
-      .from("customers")
-      .select("*", { count: "exact", head: true })
-      .eq("coach_id", coach.id);
-    totalCustomers = total ?? 0;
+    // Build base count query, optionally scoped to this coach's customers.
+    // Admin skips the coach_id filter to see all customers in the system.
+    const buildQuery = (status?: string) => {
+      let q = supabase
+        .from("customers")
+        .select("*", { count: "exact", head: true });
+      if (!isAdmin) q = q.eq("coach_id", coach.id);
+      if (status) q = q.eq("status", status);
+      return q;
+    };
 
-    const { count: active } = await supabase
-      .from("customers")
-      .select("*", { count: "exact", head: true })
-      .eq("coach_id", coach.id)
-      .eq("status", "active");
-    activeCustomers = active ?? 0;
+    const [totalRes, activeRes, intakeRes] = await Promise.all([
+      buildQuery(),
+      buildQuery("active"),
+      buildQuery("intake"),
+    ]);
 
-    const { count: intake } = await supabase
-      .from("customers")
-      .select("*", { count: "exact", head: true })
-      .eq("coach_id", coach.id)
-      .eq("status", "intake");
-    intakeCustomers = intake ?? 0;
+    totalCustomers = totalRes.count ?? 0;
+    activeCustomers = activeRes.count ?? 0;
+    intakeCustomers = intakeRes.count ?? 0;
   }
 
   const firstName = (coach?.name ?? "").split(" ")[0] || "Coach";
 
   return (
     <div>
-      <p className="text-xs uppercase tracking-[0.18em] text-gold mb-3">Heute</p>
+      <p className="text-xs uppercase tracking-[0.18em] text-gold mb-3">
+        {isAdmin ? "Admin · Übersicht" : "Heute"}
+      </p>
       <h1 className="font-serif text-4xl text-white mb-2">Hallo {firstName}</h1>
       <p className="text-white/55 mb-10">
-        Schön dich wiederzusehen. Hier ist deine Übersicht.
+        {isAdmin
+          ? "Übersicht über alle Coaches und Kunden im System."
+          : "Schön dich wiederzusehen. Hier ist deine Übersicht."}
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
