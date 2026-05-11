@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase-server";
 import {
   KcalLast7Chart,
@@ -14,6 +14,8 @@ import { MealRow } from "@/components/ui/MealRow";
 import { MessageRow } from "@/components/ui/MessageRow";
 import { GoalsEditor } from "@/components/ui/GoalsEditor";
 import TrainingPlanSection from "@/components/training-plan-section";
+
+const TZ = "Europe/Vienna";
 
 const GOAL_LABELS: Record<string, string> = {
   endurance: "Ausdauer",
@@ -50,8 +52,42 @@ function formatDate(d: string | null): string {
   });
 }
 
-function isoDay(d: Date): string {
-  return d.toISOString().slice(0, 10);
+/**
+ * Returns YYYY-MM-DD for a date in Europe/Vienna time.
+ * sv-SE locale natively produces ISO 8601 date format.
+ */
+function viennaDay(d: Date): string {
+  return d.toLocaleDateString("sv-SE", { timeZone: TZ });
+}
+
+/**
+ * Builds the 30-day window we display, aligned to Vienna days.
+ *
+ * - dayKeys: oldest → newest, exactly 30 YYYY-MM-DD strings
+ * - todayKey: today in Vienna
+ * - queryFrom: lower bound for Supabase query (1-day buffer for safety
+ *   across the worst-case Vienna ↔ UTC offset)
+ *
+ * We anchor day arithmetic on 12:00 UTC, which is always inside the
+ * same Vienna day independent of DST — so subtracting whole days
+ * never accidentally crosses a day boundary.
+ */
+function buildWindow() {
+  const todayKey = viennaDay(new Date());
+  const anchor = new Date(`${todayKey}T12:00:00Z`);
+
+  const dayKeys: string[] = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(anchor);
+    d.setUTCDate(anchor.getUTCDate() - i);
+    dayKeys.push(viennaDay(d));
+  }
+
+  const queryFrom = new Date();
+  queryFrom.setUTCDate(queryFrom.getUTCDate() - 31);
+  queryFrom.setUTCHours(0, 0, 0, 0);
+
+  return { dayKeys, todayKey, queryFrom };
 }
 
 function computeStreak(
@@ -74,18 +110,21 @@ export default async function CustomerDetailPage({
 }) {
   const supabase = createClient();
 
+  // === Auth gate ===
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
 
+  // === Coach gate ===
   const { data: coach } = await supabase
     .from("coaches")
     .select("id")
-    .eq("user_id", user!.id)
+    .eq("user_id", user.id)
     .maybeSingle();
-
   if (!coach) notFound();
 
+  // === Customer gate (security: must belong to this coach) ===
   const { data: customer } = await supabase
     .from("customers")
     .select(
@@ -94,66 +133,58 @@ export default async function CustomerDetailPage({
     .eq("id", params.id)
     .eq("coach_id", coach.id)
     .maybeSingle();
-
   if (!customer) notFound();
 
-  const { data: profile } = await supabase
-    .from("customer_profiles")
-    .select("*")
-    .eq("customer_id", params.id)
-    .maybeSingle();
+  // === Window for time-series data ===
+  const { dayKeys, todayKey, queryFrom } = buildWindow();
 
-  const since = new Date();
-  since.setDate(since.getDate() - 29);
-  since.setHours(0, 0, 0, 0);
+  // === Parallel fetch: profile, food_logs, messages ===
+  const [profileRes, logsRes, msgsRes] = await Promise.all([
+    supabase
+      .from("customer_profiles")
+      .select("*")
+      .eq("customer_id", params.id)
+      .maybeSingle(),
+    supabase
+      .from("food_logs")
+      .select(
+        "id, logged_at, meal_type, raw_description, total_kcal, protein_g, carbs_g, fat_g"
+      )
+      .eq("customer_id", params.id)
+      .gte("logged_at", queryFrom.toISOString())
+      .order("logged_at", { ascending: false }),
+    supabase
+      .from("messages")
+      .select("id, direction, content, agent_name, created_at")
+      .eq("customer_id", params.id)
+      .order("created_at", { ascending: false })
+      .limit(8),
+  ]);
 
-  const { data: logsRaw } = await supabase
-    .from("food_logs")
-    .select(
-      "id, logged_at, meal_type, raw_description, total_kcal, protein_g, carbs_g, fat_g"
-    )
-    .eq("customer_id", params.id)
-    .gte("logged_at", since.toISOString())
-    .order("logged_at", { ascending: false });
+  const profile = profileRes.data;
+  const logs30 = logsRes.data ?? [];
+  const messages = msgsRes.data ?? [];
 
-  const logs30 = logsRaw ?? [];
   const recentLogs = logs30.slice(0, 8);
 
-  const { data: msgsRaw } = await supabase
-    .from("messages")
-    .select("id, direction, content, agent_name, created_at")
-    .eq("customer_id", params.id)
-    .order("created_at", { ascending: false })
-    .limit(8);
+  // === Aggregate logs by Vienna day ===
+  type DayBucket = {
+    kcal: number;
+    logCount: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
 
-  const messages = msgsRaw ?? [];
-
-  const dailyMap = new Map
-    <string,
-    {
-      kcal: number;
-      logCount: number;
-      protein: number;
-      carbs: number;
-      fat: number;
-    }
-  >();
-  for (let i = 0; i < 30; i++) {
-    const d = new Date(since);
-    d.setDate(since.getDate() + i);
-    dailyMap.set(isoDay(d), {
-      kcal: 0,
-      logCount: 0,
-      protein: 0,
-      carbs: 0,
-      fat: 0,
-    });
+  const dailyMap = new Map<string, DayBucket>();
+  for (const key of dayKeys) {
+    dailyMap.set(key, { kcal: 0, logCount: 0, protein: 0, carbs: 0, fat: 0 });
   }
   for (const log of logs30) {
     if (!log.logged_at) continue;
-    const key = isoDay(new Date(log.logged_at));
+    const key = viennaDay(new Date(log.logged_at));
     const day = dailyMap.get(key);
-    if (!day) continue;
+    if (!day) continue; // outside displayed window
     day.kcal += log.total_kcal ?? 0;
     day.logCount += 1;
     day.protein += Number(log.protein_g) || 0;
@@ -161,28 +192,24 @@ export default async function CustomerDetailPage({
     day.fat += Number(log.fat_g) || 0;
   }
 
-  const days30 = Array.from(dailyMap.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, vals]) => ({
-      date,
-      kcal: vals.kcal,
-      logCount: vals.logCount,
-    }));
-
+  // === Derived series ===
+  const days30 = dayKeys.map((date) => {
+    const v = dailyMap.get(date)!;
+    return { date, kcal: v.kcal, logCount: v.logCount };
+  });
   const days7 = days30.slice(-7);
 
-  const macro7 = days30.slice(-7).reduce(
-    (acc, d) => {
-      const day = dailyMap.get(d.date)!;
-      acc.protein += day.protein;
-      acc.carbs += day.carbs;
-      acc.fat += day.fat;
+  const macro7 = dayKeys.slice(-7).reduce(
+    (acc, key) => {
+      const v = dailyMap.get(key)!;
+      acc.protein += v.protein;
+      acc.carbs += v.carbs;
+      acc.fat += v.fat;
       return acc;
     },
     { protein: 0, carbs: 0, fat: 0 }
   );
 
-  const todayKey = isoDay(new Date());
   const today = dailyMap.get(todayKey) ?? {
     kcal: 0,
     logCount: 0,
