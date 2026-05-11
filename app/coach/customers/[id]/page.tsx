@@ -119,20 +119,26 @@ export default async function CustomerDetailPage({
   // === Coach gate ===
   const { data: coach } = await supabase
     .from("coaches")
-    .select("id")
+    .select("id, role")
     .eq("user_id", user.id)
     .maybeSingle();
   if (!coach) notFound();
 
-  // === Customer gate (security: must belong to this coach) ===
-  const { data: customer } = await supabase
+  const isAdmin = coach.role === "admin";
+
+  // === Customer gate (security: must belong to this coach, unless admin) ===
+  let customerQuery = supabase
     .from("customers")
     .select(
       "id, first_name, telegram_username, telegram_chat_id, status, onboarded_at, created_at, coach_id"
     )
-    .eq("id", params.id)
-    .eq("coach_id", coach.id)
-    .maybeSingle();
+    .eq("id", params.id);
+
+  if (!isAdmin) {
+    customerQuery = customerQuery.eq("coach_id", coach.id);
+  }
+
+  const { data: customer } = await customerQuery.maybeSingle();
   if (!customer) notFound();
 
   // === Window for time-series data ===
