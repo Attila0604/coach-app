@@ -25,19 +25,24 @@ export default async function CustomersPage() {
 
   const { data: coach } = await supabase
     .from("coaches")
-    .select("id")
+    .select("id, role")
     .eq("user_id", user!.id)
     .maybeSingle();
 
-  const { data: customers } = coach
-    ? await supabase
-        .from("customers")
-        .select(
-          "id, first_name, telegram_username, status, telegram_chat_id, created_at"
-        )
-        .eq("coach_id", coach.id)
-        .order("created_at", { ascending: false })
-    : { data: [] };
+  const isAdmin = coach?.role === "admin";
+
+  let customerQuery = supabase
+    .from("customers")
+    .select(
+      "id, first_name, telegram_username, status, telegram_chat_id, created_at"
+    )
+    .order("created_at", { ascending: false });
+
+  if (!isAdmin && coach) {
+    customerQuery = customerQuery.eq("coach_id", coach.id);
+  }
+
+  const { data: customers } = coach ? await customerQuery : { data: [] };
 
   const list = customers ?? [];
   const activeCount = list.filter((c) => c.status === "active").length;
@@ -48,10 +53,10 @@ export default async function CustomersPage() {
       {/* === Header === */}
       <div className="mb-12">
         <p className="text-[9px] tracking-caps uppercase text-gold font-medium mb-3">
-          Übersicht
+          {isAdmin ? "Admin · Alle Kunden" : "Übersicht"}
         </p>
         <h1 className="font-serif text-5xl text-bone leading-tight mb-4">
-          Deine Kunden
+          {isAdmin ? "Alle Kunden" : "Deine Kunden"}
         </h1>
         <p className="text-sm text-bone-muted">
           {list.length === 0
@@ -74,7 +79,6 @@ export default async function CustomersPage() {
       {/* === Customer list === */}
       {list.length > 0 && (
         <div>
-          {/* Column headers */}
           <div className="grid grid-cols-[1fr_auto_auto] gap-6 px-1 pb-4 border-b border-white/[0.06]">
             <span className="text-[9px] tracking-caps uppercase text-bone-muted font-medium">
               Name
@@ -87,7 +91,6 @@ export default async function CustomersPage() {
             </span>
           </div>
 
-          {/* Rows */}
           {list.map((c) => (
             <Link
               key={c.id}
