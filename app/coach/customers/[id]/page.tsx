@@ -13,6 +13,7 @@ import { StatStrip, StatCell } from "@/components/ui/StatStrip";
 import { MealRow } from "@/components/ui/MealRow";
 import { MessageRow } from "@/components/ui/MessageRow";
 import { GoalsEditor } from "@/components/ui/GoalsEditor";
+import { CoachNotesEditor } from "@/components/ui/CoachNotesEditor";
 import TrainingPlanSection from "@/components/training-plan-section";
 
 const TZ = "Europe/Vienna";
@@ -62,15 +63,6 @@ function viennaDay(d: Date): string {
 
 /**
  * Builds the 30-day window we display, aligned to Vienna days.
- *
- * - dayKeys: oldest → newest, exactly 30 YYYY-MM-DD strings
- * - todayKey: today in Vienna
- * - queryFrom: lower bound for Supabase query (1-day buffer for safety
- *   across the worst-case Vienna ↔ UTC offset)
- *
- * We anchor day arithmetic on 12:00 UTC, which is always inside the
- * same Vienna day independent of DST — so subtracting whole days
- * never accidentally crosses a day boundary.
  */
 function buildWindow() {
   const todayKey = viennaDay(new Date());
@@ -144,8 +136,8 @@ export default async function CustomerDetailPage({
   // === Window for time-series data ===
   const { dayKeys, todayKey, queryFrom } = buildWindow();
 
-  // === Parallel fetch: profile, food_logs, messages ===
-  const [profileRes, logsRes, msgsRes] = await Promise.all([
+  // === Parallel fetch: profile, food_logs, messages, coach_notes ===
+  const [profileRes, logsRes, msgsRes, notesRes] = await Promise.all([
     supabase
       .from("customer_profiles")
       .select("*")
@@ -165,11 +157,20 @@ export default async function CustomerDetailPage({
       .eq("customer_id", params.id)
       .order("created_at", { ascending: false })
       .limit(8),
+    supabase
+      .from("coach_notes")
+      .select("id, content, is_active, created_at, expires_at")
+      .eq("customer_id", params.id)
+      .order("created_at", { ascending: false })
+      .limit(20),
   ]);
 
   const profile = profileRes.data;
   const logs30 = logsRes.data ?? [];
   const messages = msgsRes.data ?? [];
+  const allNotes = notesRes.data ?? [];
+  const activeNote = allNotes.find((n) => n.is_active) ?? null;
+  const notesHistory = allNotes.filter((n) => !n.is_active).slice(0, 5);
 
   const recentLogs = logs30.slice(0, 8);
 
@@ -186,11 +187,12 @@ export default async function CustomerDetailPage({
   for (const key of dayKeys) {
     dailyMap.set(key, { kcal: 0, logCount: 0, protein: 0, carbs: 0, fat: 0 });
   }
+
   for (const log of logs30) {
     if (!log.logged_at) continue;
     const key = viennaDay(new Date(log.logged_at));
     const day = dailyMap.get(key);
-    if (!day) continue; // outside displayed window
+    if (!day) continue;
     day.kcal += log.total_kcal ?? 0;
     day.logCount += 1;
     day.protein += Number(log.protein_g) || 0;
@@ -203,6 +205,7 @@ export default async function CustomerDetailPage({
     const v = dailyMap.get(date)!;
     return { date, kcal: v.kcal, logCount: v.logCount };
   });
+
   const days7 = days30.slice(-7);
 
   const macro7 = dayKeys.slice(-7).reduce(
@@ -438,6 +441,14 @@ export default async function CustomerDetailPage({
             </div>
           )}
         </Panel>
+      </div>
+
+      <div className="mt-12">
+        <CoachNotesEditor
+          customerId={params.id}
+          activeNote={activeNote}
+          notesHistory={notesHistory}
+        />
       </div>
 
       <div className="mt-12">
