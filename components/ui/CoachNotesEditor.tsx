@@ -20,6 +20,8 @@ type Props = {
   notesHistory: Note[];
 };
 
+const NOTE_MAX_LENGTH = 500;
+
 function timeAgoDe(iso: string): string {
   const date = new Date(iso);
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -44,31 +46,33 @@ export function CoachNotesEditor({
   notesHistory,
 }: Props) {
   const [content, setContent] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim()) return;
-
-    const formData = new FormData();
-    formData.append("customerId", customerId);
-    formData.append("content", content);
+    setError(null);
 
     startTransition(async () => {
-      await saveCoachNote(formData);
-      setContent("");
+      const result = await saveCoachNote(customerId, content);
+      if (result.ok) {
+        setContent("");
+      } else {
+        setError(result.error);
+      }
     });
   };
 
   const handleDeactivate = (noteId: string) => {
     if (!confirm("Diese Notiz wirklich deaktivieren?")) return;
-
-    const formData = new FormData();
-    formData.append("noteId", noteId);
-    formData.append("customerId", customerId);
+    setError(null);
 
     startTransition(async () => {
-      await deactivateCoachNote(formData);
+      const result = await deactivateCoachNote(noteId, customerId);
+      if (!result.ok) {
+        setError(result.error);
+      }
     });
   };
 
@@ -112,13 +116,13 @@ export function CoachNotesEditor({
               : "Was möchtest du dem Kunden mitteilen?"
           }
           rows={3}
-          maxLength={500}
+          maxLength={NOTE_MAX_LENGTH}
           disabled={isPending}
           className="w-full bg-black/30 border border-white/10 px-3 py-2 text-sm text-bone placeholder:text-bone-faint focus:outline-none focus:border-gold/50 transition resize-none disabled:opacity-50"
         />
         <div className="flex items-baseline justify-between gap-3">
           <p className="text-[10px] text-bone-faint tabular-nums">
-            {content.length}/500
+            {content.length}/{NOTE_MAX_LENGTH}
           </p>
           <button
             type="submit"
@@ -128,6 +132,9 @@ export function CoachNotesEditor({
             {isPending ? "Speichert..." : "Speichern"}
           </button>
         </div>
+        {error && (
+          <p className="text-[11px] text-red-400 italic">{error}</p>
+        )}
       </form>
 
       {notesHistory.length > 0 && (
