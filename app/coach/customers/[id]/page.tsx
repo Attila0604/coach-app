@@ -14,6 +14,7 @@ import { MealRow } from "@/components/ui/MealRow";
 import { MessageRow } from "@/components/ui/MessageRow";
 import { GoalsEditor } from "@/components/ui/GoalsEditor";
 import { CoachNotesEditor } from "@/components/ui/CoachNotesEditor";
+import { NutritionSetup } from "@/components/ui/NutritionSetup";
 import TrainingPlanSection from "@/components/training-plan-section";
 
 const TZ = "Europe/Vienna";
@@ -53,17 +54,10 @@ function formatDate(d: string | null): string {
   });
 }
 
-/**
- * Returns YYYY-MM-DD for a date in Europe/Vienna time.
- * sv-SE locale natively produces ISO 8601 date format.
- */
 function viennaDay(d: Date): string {
   return d.toLocaleDateString("sv-SE", { timeZone: TZ });
 }
 
-/**
- * Builds the 30-day window we display, aligned to Vienna days.
- */
 function buildWindow() {
   const todayKey = viennaDay(new Date());
   const anchor = new Date(`${todayKey}T12:00:00Z`);
@@ -102,13 +96,11 @@ export default async function CustomerDetailPage({
 }) {
   const supabase = createClient();
 
-  // === Auth gate ===
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // === Coach gate ===
   const { data: coach } = await supabase
     .from("coaches")
     .select("id, role")
@@ -118,7 +110,6 @@ export default async function CustomerDetailPage({
 
   const isAdmin = coach.role === "admin";
 
-  // === Customer gate (security: must belong to this coach, unless admin) ===
   let customerQuery = supabase
     .from("customers")
     .select(
@@ -133,11 +124,9 @@ export default async function CustomerDetailPage({
   const { data: customer } = await customerQuery.maybeSingle();
   if (!customer) notFound();
 
-  // === Window for time-series data ===
   const { dayKeys, todayKey, queryFrom } = buildWindow();
 
-  // === Parallel fetch: profile, food_logs, messages, coach_notes ===
-  const [profileRes, logsRes, msgsRes, notesRes] = await Promise.all([
+  const [profileRes, logsRes, msgsRes, notesRes, foodsRes] = await Promise.all([
     supabase
       .from("customer_profiles")
       .select("*")
@@ -163,6 +152,13 @@ export default async function CustomerDetailPage({
       .eq("customer_id", params.id)
       .order("created_at", { ascending: false })
       .limit(20),
+    supabase
+      .from("customer_foods")
+      .select(
+        "id, name, category, notes, is_preferred, sort_order, created_at"
+      )
+      .eq("customer_id", params.id)
+      .order("created_at", { ascending: true }),
   ]);
 
   const profile = profileRes.data;
@@ -171,10 +167,17 @@ export default async function CustomerDetailPage({
   const allNotes = notesRes.data ?? [];
   const activeNote = allNotes.find((n) => n.is_active) ?? null;
   const notesHistory = allNotes.filter((n) => !n.is_active).slice(0, 5);
+  const foods = foodsRes.data ?? [];
+
+  const nutritionSettings = {
+    meal_plan_frequency:
+      (profile?.meal_plan_frequency as "daily" | "weekly") || "weekly",
+    ai_tips_enabled: !!profile?.ai_tips_enabled,
+    meal_plan_via_telegram: profile?.meal_plan_via_telegram ?? true,
+  };
 
   const recentLogs = logs30.slice(0, 8);
 
-  // === Aggregate logs by Vienna day ===
   type DayBucket = {
     kcal: number;
     logCount: number;
@@ -200,7 +203,6 @@ export default async function CustomerDetailPage({
     day.fat += Number(log.fat_g) || 0;
   }
 
-  // === Derived series ===
   const days30 = dayKeys.map((date) => {
     const v = dailyMap.get(date)!;
     return { date, kcal: v.kcal, logCount: v.logCount };
@@ -441,6 +443,14 @@ export default async function CustomerDetailPage({
             </div>
           )}
         </Panel>
+      </div>
+
+      <div className="mt-12">
+        <NutritionSetup
+          customerId={params.id}
+          foods={foods}
+          settings={nutritionSettings}
+        />
       </div>
 
       <div className="mt-12">
