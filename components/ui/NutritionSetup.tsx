@@ -5,6 +5,7 @@ import {
   addCustomerFood,
   deleteCustomerFood,
   updateCustomerSettings,
+  generateMealPlan,
 } from "@/app/coach/customers/[id]/actions";
 
 type Food = {
@@ -57,9 +58,9 @@ export function NutritionSetup({ customerId, foods, settings }: Props) {
   const [foodCategory, setFoodCategory] = useState("");
   const [foodNotes, setFoodNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [genSuccess, setGenSuccess] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  // Group foods by category
   const grouped: Record<string, Food[]> = {};
   for (const food of foods) {
     const cat = food.category || "other";
@@ -71,6 +72,7 @@ export function NutritionSetup({ customerId, foods, settings }: Props) {
     e.preventDefault();
     if (!foodName.trim()) return;
     setError(null);
+    setGenSuccess(null);
 
     startTransition(async () => {
       const result = await addCustomerFood(
@@ -92,6 +94,7 @@ export function NutritionSetup({ customerId, foods, settings }: Props) {
   const handleDelete = (foodId: string) => {
     if (!confirm("Lebensmittel wirklich löschen?")) return;
     setError(null);
+    setGenSuccess(null);
 
     startTransition(async () => {
       const result = await deleteCustomerFood(foodId, customerId);
@@ -104,11 +107,34 @@ export function NutritionSetup({ customerId, foods, settings }: Props) {
     value: string | boolean
   ) => {
     setError(null);
+    setGenSuccess(null);
     const newSettings = { ...settings, [key]: value };
 
     startTransition(async () => {
       const result = await updateCustomerSettings(customerId, newSettings);
       if (!result.ok) setError(result.error);
+    });
+  };
+
+  const handleGeneratePlan = () => {
+    if (foods.length === 0) {
+      setError("Bitte erst Lebensmittel hinzufügen.");
+      return;
+    }
+    setError(null);
+    setGenSuccess(null);
+
+    startTransition(async () => {
+      const result = await generateMealPlan(customerId);
+      if (result.ok) {
+        setGenSuccess(
+          result.summary
+            ? `Plan generiert. ${result.summary}`
+            : "Plan erfolgreich generiert!"
+        );
+      } else {
+        setError(result.error);
+      }
     });
   };
 
@@ -162,6 +188,23 @@ export function NutritionSetup({ customerId, foods, settings }: Props) {
             label={settings.meal_plan_via_telegram ? "Ja" : "Nein"}
           />
         </div>
+      </div>
+
+      {/* AI Generate Button */}
+      <div className="mb-6 pb-6 border-b border-white/[0.06]">
+        <button
+          type="button"
+          onClick={handleGeneratePlan}
+          disabled={isPending || foods.length === 0}
+          className="w-full text-[11px] uppercase tracking-caps font-medium px-4 py-3 border border-gold/40 text-gold hover:bg-gold/10 transition disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          {isPending ? "⏳ KI generiert…" : "✨ Tages-Plan generieren"}
+        </button>
+        {genSuccess && (
+          <p className="text-[11px] text-gold/80 italic mt-3 leading-relaxed">
+            ✓ {genSuccess}
+          </p>
+        )}
       </div>
 
       {/* Add food form */}
@@ -290,9 +333,7 @@ function Toggle({
           }`}
         />
       </button>
-      {label && (
-        <span className="text-xs text-bone-muted">{label}</span>
-      )}
+      {label && <span className="text-xs text-bone-muted">{label}</span>}
     </div>
   );
 }
