@@ -15,6 +15,7 @@ import { MessageRow } from "@/components/ui/MessageRow";
 import { GoalsEditor } from "@/components/ui/GoalsEditor";
 import { CoachNotesEditor } from "@/components/ui/CoachNotesEditor";
 import { NutritionSetup } from "@/components/ui/NutritionSetup";
+import { MealPlanDisplay } from "@/components/ui/MealPlanDisplay";
 import TrainingPlanSection from "@/components/training-plan-section";
 
 const TZ = "Europe/Vienna";
@@ -126,40 +127,51 @@ export default async function CustomerDetailPage({
 
   const { dayKeys, todayKey, queryFrom } = buildWindow();
 
-  const [profileRes, logsRes, msgsRes, notesRes, foodsRes] = await Promise.all([
-    supabase
-      .from("customer_profiles")
-      .select("*")
-      .eq("customer_id", params.id)
-      .maybeSingle(),
-    supabase
-      .from("food_logs")
-      .select(
-        "id, logged_at, meal_type, raw_description, total_kcal, protein_g, carbs_g, fat_g"
-      )
-      .eq("customer_id", params.id)
-      .gte("logged_at", queryFrom.toISOString())
-      .order("logged_at", { ascending: false }),
-    supabase
-      .from("messages")
-      .select("id, direction, content, agent_name, created_at")
-      .eq("customer_id", params.id)
-      .order("created_at", { ascending: false })
-      .limit(8),
-    supabase
-      .from("coach_notes")
-      .select("id, content, is_active, created_at, expires_at")
-      .eq("customer_id", params.id)
-      .order("created_at", { ascending: false })
-      .limit(20),
-    supabase
-      .from("customer_foods")
-      .select(
-        "id, name, category, notes, is_preferred, sort_order, created_at"
-      )
-      .eq("customer_id", params.id)
-      .order("created_at", { ascending: true }),
-  ]);
+  const [profileRes, logsRes, msgsRes, notesRes, foodsRes, mealPlanRes] =
+    await Promise.all([
+      supabase
+        .from("customer_profiles")
+        .select("*")
+        .eq("customer_id", params.id)
+        .maybeSingle(),
+      supabase
+        .from("food_logs")
+        .select(
+          "id, logged_at, meal_type, raw_description, total_kcal, protein_g, carbs_g, fat_g"
+        )
+        .eq("customer_id", params.id)
+        .gte("logged_at", queryFrom.toISOString())
+        .order("logged_at", { ascending: false }),
+      supabase
+        .from("messages")
+        .select("id, direction, content, agent_name, created_at")
+        .eq("customer_id", params.id)
+        .order("created_at", { ascending: false })
+        .limit(8),
+      supabase
+        .from("coach_notes")
+        .select("id, content, is_active, created_at, expires_at")
+        .eq("customer_id", params.id)
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("customer_foods")
+        .select(
+          "id, name, category, notes, is_preferred, sort_order, created_at"
+        )
+        .eq("customer_id", params.id)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("meal_plans")
+        .select(
+          "id, plan_date, meals, total_kcal, total_protein_g, total_carbs_g, total_fat_g, ai_summary, created_at"
+        )
+        .eq("customer_id", params.id)
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
 
   const profile = profileRes.data;
   const logs30 = logsRes.data ?? [];
@@ -168,6 +180,7 @@ export default async function CustomerDetailPage({
   const activeNote = allNotes.find((n) => n.is_active) ?? null;
   const notesHistory = allNotes.filter((n) => !n.is_active).slice(0, 5);
   const foods = foodsRes.data ?? [];
+  const latestMealPlan = mealPlanRes.data;
 
   const nutritionSettings = {
     meal_plan_frequency:
@@ -452,6 +465,20 @@ export default async function CustomerDetailPage({
           settings={nutritionSettings}
         />
       </div>
+
+      {latestMealPlan && (
+        <div className="mt-12">
+          <MealPlanDisplay
+            plan={latestMealPlan}
+            targets={{
+              kcal: profile?.daily_kcal_target ?? null,
+              protein: profile?.protein_target_g ?? null,
+              carbs: profile?.carbs_target_g ?? null,
+              fat: profile?.fat_target_g ?? null,
+            }}
+          />
+        </div>
+      )}
 
       <div className="mt-12">
         <CoachNotesEditor
