@@ -356,56 +356,89 @@ export async function updateCustomerSettings(
 }
 
 // ============================================================
-// AI MEAL PLAN GENERATOR
+// AI MEAL PLAN GENERATOR (7-Tage-Plan, Draft + Publish Flow)
 // ============================================================
 
 export type MealPlanResult =
-  | { ok: true; planId: string; summary: string | null }
+  | { ok: true }
+  | { ok: false; error: string };
+
+export type GenerateMealPlanResult =
+  | { ok: true; planIds: string[]; summary: string | null }
   | { ok: false; error: string };
 
 const MEAL_PLAN_MODEL = "claude-sonnet-4-6";
 
-const MEAL_PLAN_SYSTEM_PROMPT = `Du bist ein professioneller Ernährungs-Coach. Du erstellst persönliche Tagespläne basierend auf:
-- Den Tageszielen des Kunden (Kalorien + Macros)
+const MEAL_PLAN_SYSTEM_PROMPT = `Du bist ein professioneller Ernährungs-Coach. Du erstellst 7-TAGES-PLÄNE basierend auf:
+- Den Tageszielen (gelten für JEDEN Tag der Woche)
 - Den vom Coach erlaubten Lebensmitteln
 - Dem Kundenprofil (Allergien, Vorlieben, Ziele)
 
 WICHTIGE REGELN:
 1. Verwende NUR Lebensmittel aus der "Erlaubten Liste" — nichts erfinden
 2. Schätze Macros möglichst präzise pro Lebensmittel (pro genannter Menge in Gramm)
-3. Verteile die Tages-Macros auf 3-4 Mahlzeiten (Frühstück, Mittag, Abend, optional Snack)
-4. Berücksichtige Allergien und Vorlieben strikt
-5. Bei wenig Auswahl: clever kombinieren, im "summary" ehrlich Hinweis geben
+3. Pro Tag: 3-4 Mahlzeiten (Frühstück, Mittag, Abend, optional Snack)
+4. VARIIERE die Mahlzeiten über die 7 Tage — keine identischen Tage hintereinander
+5. Berücksichtige Allergien und Vorlieben strikt
+6. Bei wenig Auswahl: clever kombinieren, im "summary" ehrlich Hinweis geben
+7. Der "summary" Text ist NUR FÜR DEN COACH gedacht — schreibe als professionelle Notiz an den Coach
 
 ANTWORTE AUSSCHLIESSLICH MIT VALIDEM JSON (kein Markdown, kein Vortext, kein Text danach):
 
 {
-  "meals": [
+  "days": [
     {
-      "meal_type": "breakfast" | "lunch" | "dinner" | "snack",
-      "name": "Name der Mahlzeit",
-      "items": [
-        { "food": "Lebensmittel-Name (exakt aus Liste)", "grams": 100, "kcal": 165, "protein_g": 31, "carbs_g": 0, "fat_g": 4 }
+      "day_index": 0,
+      "meals": [
+        {
+          "meal_type": "breakfast" | "lunch" | "dinner" | "snack",
+          "name": "Name der Mahlzeit",
+          "items": [
+            { "food": "Lebensmittel-Name (exakt aus Liste)", "grams": 100, "kcal": 165, "protein_g": 31, "carbs_g": 0, "fat_g": 4 }
+          ],
+          "total_kcal": 165,
+          "total_protein_g": 31,
+          "total_carbs_g": 0,
+          "total_fat_g": 4,
+          "notes": "Optionale Zubereitungs-Hinweise"
+        }
       ],
-      "total_kcal": 165,
-      "total_protein_g": 31,
-      "total_carbs_g": 0,
-      "total_fat_g": 4,
-      "notes": "Optionale Hinweise zur Zubereitung"
+      "total_kcal": 1600,
+      "total_protein_g": 165,
+      "total_carbs_g": 220,
+      "total_fat_g": 73
     }
   ],
-  "total_kcal": 1600,
-  "total_protein_g": 165,
-  "total_carbs_g": 220,
-  "total_fat_g": 73,
-  "summary": "1-2 Sätze Zusammenfassung mit Logik des Plans"
-}`;
+  "summary": "Coach-Notiz zur Wochenplanung — z.B. Hinweise zur Variety, Macro-Erreichbarkeit, Empfehlungen für die Food-Library"
+}
+
+Genau 7 days[] Einträge mit day_index 0 bis 6.`;
 
 type FoodLite = {
   name: string;
   category: string | null;
   notes: string | null;
 };
+
+function addDaysISO(startDateISO: string, days: number): string {
+  const d = new Date(`${startDateISO}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().split("T")[0];
+}
+
+function formatDateDe(iso: string): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  return d.toLocaleDateString("de-DE", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function isValidIsoDate(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(`${s}T00:00:00Z`));
+}
 
 function buildMealPlanPrompt(args: {
   customerName: string;
@@ -423,9 +456,9 @@ function buildMealPlanPrompt(args: {
     fat_target_g?: number | null;
   };
   foods: FoodLite[];
-  planDate: string;
+  startDate: string;
 }): string {
-  const { customerName, profile, foods, planDate } = args;
+  const { customerName, profile, foods, startDate } = args;
 
   const allergies = (profile.allergies || []).join(", ") || "Keine";
   const preferences = (profile.food_preferences || []).join(", ") || "Keine";
@@ -447,7 +480,13 @@ function buildMealPlanPrompt(args: {
     })
     .join("\n\n");
 
-  return `Erstelle einen TAGESPLAN für den ${planDate}.
+  // Build dates list for context
+  const dates = Array.from({ length: 7 }, (_, i) =>
+    formatDateDe(addDaysISO(startDate, i))
+  );
+  const datesList = dates.map((d, i) => `  Tag ${i + 1}: ${d}`).join("\n");
+
+  return `Erstelle einen 7-TAGES-PLAN beginnend mit ${formatDateDe(startDate)}.
 
 KUNDE:
 - Name: ${customerName}
@@ -457,24 +496,26 @@ KUNDE:
 - Allergien: ${allergies}
 - Vorlieben: ${preferences}
 
-TAGESZIELE (möglichst genau treffen):
+TAGESZIELE (gelten für JEDEN der 7 Tage):
 - Kalorien: ${profile.daily_kcal_target ?? "?"} kcal
 - Protein: ${profile.protein_target_g ?? "?"} g
 - Carbs: ${profile.carbs_target_g ?? "?"} g
 - Fett: ${profile.fat_target_g ?? "?"} g
 
+TAGE:
+${datesList}
+
 ERLAUBTE LEBENSMITTEL (NUR diese verwenden):
 ${foodsList}
 
-Erstelle 3-4 Mahlzeiten. Antworte AUSSCHLIESSLICH mit JSON wie im System-Prompt definiert.`;
+Erstelle 7 Tagespläne mit jeweils 3-4 Mahlzeiten. VARIIERE die Mahlzeiten über die Woche.
+Antworte AUSSCHLIESSLICH mit JSON wie im System-Prompt definiert (7 Einträge in "days").`;
 }
 
-function extractJson(text: string): unknown {
-  // Try parsing directly
+function extractJson(text: string): any {
   try {
     return JSON.parse(text);
   } catch {
-    // Strip markdown code fences
     const cleaned = text
       .replace(/^```(?:json)?\s*/i, "")
       .replace(/```\s*$/i, "")
@@ -482,7 +523,6 @@ function extractJson(text: string): unknown {
     try {
       return JSON.parse(cleaned);
     } catch {
-      // Last resort: find first { and last }
       const firstBrace = text.indexOf("{");
       const lastBrace = text.lastIndexOf("}");
       if (firstBrace !== -1 && lastBrace > firstBrace) {
@@ -494,11 +534,19 @@ function extractJson(text: string): unknown {
   }
 }
 
+/**
+ * Generiert einen 7-Tage-Plan als DRAFT.
+ * Vorab werden alle existierenden Drafts für diesen Kunden auf 'replaced' gesetzt.
+ * Coach sieht und editiert den Draft, danach Aufruf von publishMealPlan().
+ */
 export async function generateMealPlan(
   customerId: string,
-  planDate?: string
-): Promise<MealPlanResult> {
+  startDate: string
+): Promise<GenerateMealPlanResult> {
   if (!customerId) return { ok: false, error: "Kunden-ID fehlt." };
+  if (!startDate || !isValidIsoDate(startDate)) {
+    return { ok: false, error: "Ungültiges Start-Datum (Format YYYY-MM-DD)." };
+  }
 
   const auth = await verifyCoachOwnsCustomer(customerId);
   if (!auth.ok) return auth;
@@ -538,17 +586,16 @@ export async function generateMealPlan(
   if (!profile?.daily_kcal_target) {
     return {
       ok: false,
-      error: "Tagesziele nicht gesetzt (Kalorien fehlen). Bitte erst Tagesziele konfigurieren.",
+      error:
+        "Tagesziele nicht gesetzt (Kalorien fehlen). Bitte erst Tagesziele konfigurieren.",
     };
   }
-
-  const date = planDate || new Date().toISOString().split("T")[0];
 
   const prompt = buildMealPlanPrompt({
     customerName: customer.first_name || customer.telegram_username || "Kunde",
     profile,
     foods,
-    planDate: date,
+    startDate,
   });
 
   let aiResponse: string;
@@ -557,7 +604,7 @@ export async function generateMealPlan(
       [{ role: "user", content: prompt }],
       {
         model: MEAL_PLAN_MODEL,
-        maxTokens: 4000,
+        maxTokens: 8000,
         system: MEAL_PLAN_SYSTEM_PROMPT,
         temperature: 0.7,
       }
@@ -570,50 +617,211 @@ export async function generateMealPlan(
   let parsed: any;
   try {
     parsed = extractJson(aiResponse);
-  } catch (e) {
+  } catch {
     return {
       ok: false,
       error: "AI-Antwort konnte nicht geparst werden. Bitte nochmal versuchen.",
     };
   }
 
-  if (!Array.isArray(parsed.meals) || parsed.meals.length === 0) {
-    return { ok: false, error: "Ungültige Plan-Struktur (keine Mahlzeiten)." };
+  if (!Array.isArray(parsed.days) || parsed.days.length !== 7) {
+    return {
+      ok: false,
+      error: `Ungültige Plan-Struktur: erwartet 7 Tage, erhalten ${
+        Array.isArray(parsed.days) ? parsed.days.length : 0
+      }.`,
+    };
   }
 
-  // Archive any existing active plan for this customer + date
+  // Alle existierenden Drafts dieses Kunden auf 'replaced' setzen
   await supabase
     .from("meal_plans")
-    .update({ status: "replaced" })
+    .update({ status: "replaced", updated_at: new Date().toISOString() })
     .eq("customer_id", customerId)
-    .eq("plan_date", date)
-    .eq("status", "active");
+    .eq("status", "draft");
+
+  // 7 neue Drafts einfügen
+  const rows = parsed.days.map((day: any, i: number) => ({
+    customer_id: customerId,
+    coach_id: auth.coachId,
+    plan_date: addDaysISO(startDate, i),
+    plan_type: "weekly",
+    meals: Array.isArray(day.meals) ? day.meals : [],
+    total_kcal: day.total_kcal ?? null,
+    total_protein_g: day.total_protein_g ?? null,
+    total_carbs_g: day.total_carbs_g ?? null,
+    total_fat_g: day.total_fat_g ?? null,
+    ai_model: MEAL_PLAN_MODEL,
+    // ai_summary nur auf dem ersten Tag speichern (gilt für die ganze Woche)
+    ai_summary: i === 0 ? parsed.summary ?? null : null,
+    status: "draft",
+  }));
 
   const { data: inserted, error: insertError } = await supabase
     .from("meal_plans")
-    .insert({
-      customer_id: customerId,
-      coach_id: auth.coachId,
-      plan_date: date,
-      plan_type: "daily",
-      meals: parsed.meals,
-      total_kcal: parsed.total_kcal ?? null,
-      total_protein_g: parsed.total_protein_g ?? null,
-      total_carbs_g: parsed.total_carbs_g ?? null,
-      total_fat_g: parsed.total_fat_g ?? null,
-      ai_model: MEAL_PLAN_MODEL,
-      ai_summary: parsed.summary ?? null,
-      status: "active",
-    })
-    .select("id")
-    .single();
+    .insert(rows)
+    .select("id");
 
   if (insertError) return { ok: false, error: insertError.message };
 
   revalidatePath(`/coach/customers/${customerId}`);
   return {
     ok: true,
-    planId: inserted.id,
-    summary: parsed.summary || null,
+    planIds: (inserted ?? []).map((p) => p.id),
+    summary: parsed.summary ?? null,
   };
+}
+
+/**
+ * Coach editiert einen einzelnen Tag (Mahlzeiten anpassen).
+ * Totals werden serverseitig aus den Items neu berechnet.
+ */
+export async function updateMealPlanMeals(
+  planId: string,
+  customerId: string,
+  meals: any[]
+): Promise<MealPlanResult> {
+  if (!planId || !customerId) {
+    return { ok: false, error: "Fehlende Daten." };
+  }
+  if (!Array.isArray(meals)) {
+    return { ok: false, error: "Ungültige Mahlzeiten-Daten." };
+  }
+
+  const auth = await verifyCoachOwnsCustomer(customerId);
+  if (!auth.ok) return auth;
+
+  // Recalculate totals from items
+  let totalKcal = 0;
+  let totalProtein = 0;
+  let totalCarbs = 0;
+  let totalFat = 0;
+
+  for (const meal of meals) {
+    let mealKcal = 0;
+    let mealProtein = 0;
+    let mealCarbs = 0;
+    let mealFat = 0;
+    const items = Array.isArray(meal.items) ? meal.items : [];
+    for (const item of items) {
+      mealKcal += Number(item.kcal) || 0;
+      mealProtein += Number(item.protein_g) || 0;
+      mealCarbs += Number(item.carbs_g) || 0;
+      mealFat += Number(item.fat_g) || 0;
+    }
+    meal.total_kcal = Math.round(mealKcal);
+    meal.total_protein_g = Math.round(mealProtein);
+    meal.total_carbs_g = Math.round(mealCarbs);
+    meal.total_fat_g = Math.round(mealFat);
+
+    totalKcal += mealKcal;
+    totalProtein += mealProtein;
+    totalCarbs += mealCarbs;
+    totalFat += mealFat;
+  }
+
+  const supabase = createClient();
+
+  // Verify the plan belongs to this customer
+  const { data: plan } = await supabase
+    .from("meal_plans")
+    .select("id, customer_id, status")
+    .eq("id", planId)
+    .maybeSingle();
+  if (!plan) return { ok: false, error: "Plan nicht gefunden." };
+  if (plan.customer_id !== customerId) {
+    return { ok: false, error: "Plan gehört nicht zu diesem Kunden." };
+  }
+  if (plan.status === "replaced") {
+    return { ok: false, error: "Ersetzte Pläne können nicht editiert werden." };
+  }
+
+  const { error } = await supabase
+    .from("meal_plans")
+    .update({
+      meals,
+      total_kcal: Math.round(totalKcal),
+      total_protein_g: Math.round(totalProtein),
+      total_carbs_g: Math.round(totalCarbs),
+      total_fat_g: Math.round(totalFat),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", planId);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/coach/customers/${customerId}`);
+  return { ok: true };
+}
+
+/**
+ * Coach veröffentlicht alle aktuellen Draft-Pläne dieses Kunden.
+ * Existierende published Pläne für die gleichen Daten werden auf 'replaced' gesetzt.
+ */
+export async function publishMealPlan(
+  customerId: string
+): Promise<MealPlanResult> {
+  if (!customerId) return { ok: false, error: "Kunden-ID fehlt." };
+
+  const auth = await verifyCoachOwnsCustomer(customerId);
+  if (!auth.ok) return auth;
+
+  const supabase = createClient();
+
+  const { data: drafts } = await supabase
+    .from("meal_plans")
+    .select("id, plan_date")
+    .eq("customer_id", customerId)
+    .eq("status", "draft");
+
+  if (!drafts || drafts.length === 0) {
+    return { ok: false, error: "Kein Draft-Plan zum Veröffentlichen." };
+  }
+
+  const draftDates = drafts.map((d) => d.plan_date);
+
+  // Vorhandene published Pläne für diese Daten auf 'replaced' setzen
+  await supabase
+    .from("meal_plans")
+    .update({ status: "replaced", updated_at: new Date().toISOString() })
+    .eq("customer_id", customerId)
+    .eq("status", "published")
+    .in("plan_date", draftDates);
+
+  // Drafts veröffentlichen
+  const { error } = await supabase
+    .from("meal_plans")
+    .update({ status: "published", updated_at: new Date().toISOString() })
+    .eq("customer_id", customerId)
+    .eq("status", "draft");
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/coach/customers/${customerId}`);
+  return { ok: true };
+}
+
+/**
+ * Coach verwirft den aktuellen Draft-Plan ohne zu veröffentlichen.
+ */
+export async function discardMealPlanDraft(
+  customerId: string
+): Promise<MealPlanResult> {
+  if (!customerId) return { ok: false, error: "Kunden-ID fehlt." };
+
+  const auth = await verifyCoachOwnsCustomer(customerId);
+  if (!auth.ok) return auth;
+
+  const supabase = createClient();
+
+  const { error } = await supabase
+    .from("meal_plans")
+    .update({ status: "replaced", updated_at: new Date().toISOString() })
+    .eq("customer_id", customerId)
+    .eq("status", "draft");
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/coach/customers/${customerId}`);
+  return { ok: true };
 }
