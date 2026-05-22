@@ -15,7 +15,10 @@ import { MessageRow } from "@/components/ui/MessageRow";
 import { GoalsEditor } from "@/components/ui/GoalsEditor";
 import { CoachNotesEditor } from "@/components/ui/CoachNotesEditor";
 import { NutritionSetup } from "@/components/ui/NutritionSetup";
-import { MealPlanDisplay } from "@/components/ui/MealPlanDisplay";
+import {
+  WeeklyMealPlanEditor,
+  type Plan as MealPlan,
+} from "@/components/ui/WeeklyMealPlanEditor";
 import TrainingPlanSection from "@/components/training-plan-section";
 
 const TZ = "Europe/Vienna";
@@ -127,7 +130,7 @@ export default async function CustomerDetailPage({
 
   const { dayKeys, todayKey, queryFrom } = buildWindow();
 
-  const [profileRes, logsRes, msgsRes, notesRes, foodsRes, mealPlanRes] =
+  const [profileRes, logsRes, msgsRes, notesRes, foodsRes, mealPlansRes] =
     await Promise.all([
       supabase
         .from("customer_profiles")
@@ -164,13 +167,12 @@ export default async function CustomerDetailPage({
       supabase
         .from("meal_plans")
         .select(
-          "id, plan_date, meals, total_kcal, total_protein_g, total_carbs_g, total_fat_g, ai_summary, created_at"
+          "id, plan_date, meals, total_kcal, total_protein_g, total_carbs_g, total_fat_g, ai_summary, status, created_at, updated_at"
         )
         .eq("customer_id", params.id)
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+        .gte("plan_date", todayKey)
+        .in("status", ["draft", "published"])
+        .order("plan_date", { ascending: true }),
     ]);
 
   const profile = profileRes.data;
@@ -180,7 +182,13 @@ export default async function CustomerDetailPage({
   const activeNote = allNotes.find((n) => n.is_active) ?? null;
   const notesHistory = allNotes.filter((n) => !n.is_active).slice(0, 5);
   const foods = foodsRes.data ?? [];
-  const latestMealPlan = mealPlanRes.data;
+  const allMealPlans = (mealPlansRes.data ?? []) as MealPlan[];
+
+  // Draft plans take precedence; if no drafts, show published.
+  const drafts = allMealPlans.filter((p) => p.status === "draft");
+  const published = allMealPlans.filter((p) => p.status === "published");
+  const visiblePlans: MealPlan[] = drafts.length > 0 ? drafts : published;
+  const hasDraft = drafts.length > 0;
 
   const nutritionSettings = {
     meal_plan_frequency:
@@ -252,6 +260,13 @@ export default async function CustomerDetailPage({
 
   const displayName =
     customer.first_name || customer.telegram_username || "Kunde";
+
+  const planTargets = {
+    kcal: profile?.daily_kcal_target ?? null,
+    protein: profile?.protein_target_g ?? null,
+    carbs: profile?.carbs_target_g ?? null,
+    fat: profile?.fat_target_g ?? null,
+  };
 
   return (
     <div>
@@ -463,19 +478,16 @@ export default async function CustomerDetailPage({
           customerId={params.id}
           foods={foods}
           settings={nutritionSettings}
+          hasDraft={hasDraft}
         />
       </div>
 
-      {latestMealPlan && (
+      {visiblePlans.length > 0 && (
         <div className="mt-12">
-          <MealPlanDisplay
-            plan={latestMealPlan}
-            targets={{
-              kcal: profile?.daily_kcal_target ?? null,
-              protein: profile?.protein_target_g ?? null,
-              carbs: profile?.carbs_target_g ?? null,
-              fat: profile?.fat_target_g ?? null,
-            }}
+          <WeeklyMealPlanEditor
+            customerId={params.id}
+            plans={visiblePlans}
+            targets={planTargets}
           />
         </div>
       )}
