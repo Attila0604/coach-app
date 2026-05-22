@@ -367,11 +367,13 @@ export type GenerateMealPlanResult =
   | { ok: true; planIds: string[]; summary: string | null }
   | { ok: false; error: string };
 
+export type RecalcResult =
+  | { ok: true; meals: any[] }
+  | { ok: false; error: string };
+
 const MEAL_PLAN_MODEL = "claude-sonnet-4-6";
 const MEAL_PLAN_MAX_TOKENS = 8192;
 
-// Kompakter System-Prompt — keine `notes` mehr pro Mahlzeit (spart Tokens),
-// und expliziter Hinweis auf kompaktes JSON ohne Whitespace.
 const MEAL_PLAN_SYSTEM_PROMPT = `Du bist ein professioneller Ernährungs-Coach. Du erstellst 7-TAGES-PLÄNE.
 
 REGELN:
@@ -387,6 +389,15 @@ ANTWORTE AUSSCHLIESSLICH MIT VALIDEM JSON. KOMPAKT, OHNE MARKDOWN, OHNE KOMMENTA
 {"days":[{"day_index":0,"meals":[{"meal_type":"breakfast","name":"...","items":[{"food":"...","grams":100,"kcal":165,"protein_g":31,"carbs_g":0,"fat_g":4}],"total_kcal":165,"total_protein_g":31,"total_carbs_g":0,"total_fat_g":4}],"total_kcal":1600,"total_protein_g":165,"total_carbs_g":220,"total_fat_g":73}],"summary":"..."}
 
 Genau 7 days[] Einträge mit day_index 0 bis 6. meal_type ist einer von: breakfast, lunch, dinner, snack. Maximal 3-4 Items pro Mahlzeit. Halte Mahlzeit-Namen kurz (max 40 Zeichen).`;
+
+const MACRO_RECALC_SYSTEM_PROMPT = `Du bist Ernährungs-Experte. Du bekommst eine Liste von Lebensmittel-Items mit Name und Gramm-Menge.
+Schätze pro Item die korrekten Makros so präzise wie möglich.
+
+ANTWORTE NUR VALIDEM JSON, KOMPAKT, OHNE MARKDOWN, OHNE VORTEXT:
+
+{"items":[{"kcal":165,"protein_g":31,"carbs_g":0,"fat_g":4}]}
+
+GENAU so viele items[] wie im Input. Reihenfolge identisch. Ganze Zahlen (gerundet).`;
 
 type FoodLite = {
   name: string;
@@ -480,18 +491,13 @@ ${foodsList}
 Antworte mit dem JSON-Format aus dem System-Prompt. 7 Tage, kompakt, ohne Markdown.`;
 }
 
-/**
- * Robuste JSON-Extraktion: handhabt Markdown-Fences, Trailing-Commas, Vortext.
- */
 function extractJson(text: string): any {
-  // 1. Direkter Parse
   try {
     return JSON.parse(text);
   } catch {
     /* continue */
   }
 
-  // 2. Markdown-Fences strippen
   let cleaned = text
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/```\s*$/i, "")
@@ -502,7 +508,6 @@ function extractJson(text: string): any {
     /* continue */
   }
 
-  // 3. Substring zwischen erstem { und letztem }
   const firstBrace = text.indexOf("{");
   const lastBrace = text.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace > firstBrace) {
@@ -513,12 +518,9 @@ function extractJson(text: string): any {
       /* continue */
     }
 
-    // 4. Trailing-Commas reparieren: ", }" → " }", ", ]" → " ]"
     const noTrailingCommas = cleaned
       .replace(/,(\s*[}\]])/g, "$1")
-      // Auch single-line comments entfernen (// ...)
       .replace(/\/\/[^\n]*/g, "")
-      // Block comments entfernen
       .replace(/\/\*[\s\S]*?\*\//g, "");
     try {
       return JSON.parse(noTrailingCommas);
@@ -534,12 +536,13 @@ async function callMealPlanAI(args: {
   systemPrompt: string;
   userPrompt: string;
   temperature: number;
+  maxTokens?: number;
 }): Promise<string> {
   return callClaude(
     [{ role: "user", content: args.userPrompt }],
     {
       model: MEAL_PLAN_MODEL,
-      maxTokens: MEAL_PLAN_MAX_TOKENS,
+      maxTokens: args.maxTokens ?? MEAL_PLAN_MAX_TOKENS,
       system: args.systemPrompt,
       temperature: args.temperature,
     }
@@ -605,7 +608,6 @@ export async function generateMealPlan(
     startDate,
   });
 
-  // Erster Versuch
   let aiResponse: string;
   try {
     aiResponse = await callMealPlanAI({
@@ -626,7 +628,6 @@ export async function generateMealPlan(
     parseError = e;
   }
 
-  // Auto-Retry mit niedriger Temperature für strikteres JSON
   if (!parsed || !Array.isArray(parsed?.days)) {
     console.error(
       "[generateMealPlan] First parse failed. Raw response (first 1000 chars):",
@@ -669,7 +670,6 @@ export async function generateMealPlan(
     };
   }
 
-  // Alte Drafts → 'replaced'
   await supabase
     .from("meal_plans")
     .update({ status: "replaced", updated_at: new Date().toISOString() })
@@ -704,6 +704,147 @@ export async function generateMealPlan(
     planIds: (inserted ?? []).map((p) => p.id),
     summary: parsed.summary ?? null,
   };
+}
+
+/**
+ * KI berechnet die Makros (kcal, Protein, Carbs, Fett) pro Item
+ * basierend auf Lebensmittel-Name und Gramm-Menge.
+ * Speichert NICHT in DB — gibt nur aktualisierte meals zurück,
+ * der Coach muss dann "Tag speichern" drücken.
+ */
+export async function recalculateMealMacros(
+  customerId: string,
+  meals: any[]
+): Promise<RecalcResult> {
+  if (!customerId) return { ok: false, error: "Kunden-ID fehlt." };
+  if (!Array.isArray(meals) || meals.length === 0) {
+    return { ok: false, error: "Keine Mahlzeiten zum Berechnen." };
+  }
+
+  const auth = await verifyCoachOwnsCustomer(customerId);
+  if (!auth.ok) return auth;
+
+  // Collect alle Items mit gültigem food-Namen
+  type ItemLoc = {
+    mealIdx: number;
+    itemIdx: number;
+    food: string;
+    grams: number;
+  };
+  const itemsToRecalc: ItemLoc[] = [];
+
+  for (let m = 0; m < meals.length; m++) {
+    const meal = meals[m];
+    const items = Array.isArray(meal.items) ? meal.items : [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const food = (it?.food ?? "").toString().trim();
+      if (food) {
+        const grams = Number(it?.grams);
+        itemsToRecalc.push({
+          mealIdx: m,
+          itemIdx: i,
+          food,
+          grams: Number.isFinite(grams) && grams > 0 ? grams : 100,
+        });
+      }
+    }
+  }
+
+  if (itemsToRecalc.length === 0) {
+    return {
+      ok: false,
+      error: "Keine Items mit Lebensmittel-Name vorhanden.",
+    };
+  }
+
+  const listText = itemsToRecalc
+    .map((it, i) => `${i + 1}. ${it.food}, ${it.grams}g`)
+    .join("\n");
+
+  const userPrompt = `Berechne Makros für diese Lebensmittel-Items:
+
+${listText}
+
+Antwort als JSON mit exakt ${itemsToRecalc.length} items.`;
+
+  let aiResponse: string;
+  try {
+    aiResponse = await callMealPlanAI({
+      systemPrompt: MACRO_RECALC_SYSTEM_PROMPT,
+      userPrompt,
+      temperature: 0.3,
+      maxTokens: 2000,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: `KI-Fehler: ${msg}` };
+  }
+
+  let parsed: any;
+  try {
+    parsed = extractJson(aiResponse);
+  } catch (e) {
+    console.error(
+      "[recalculateMealMacros] Parse failed. Raw response (first 500 chars):",
+      aiResponse?.slice(0, 500)
+    );
+    return {
+      ok: false,
+      error: "KI-Antwort konnte nicht geparst werden.",
+    };
+  }
+
+  if (
+    !Array.isArray(parsed.items) ||
+    parsed.items.length !== itemsToRecalc.length
+  ) {
+    return {
+      ok: false,
+      error: `Ungültiges KI-Format: erwartet ${itemsToRecalc.length} items, erhalten ${
+        Array.isArray(parsed.items) ? parsed.items.length : 0
+      }.`,
+    };
+  }
+
+  // Deep-clone meals damit wir nicht den input mutieren
+  const updatedMeals = meals.map((m: any) => ({
+    ...m,
+    items: Array.isArray(m.items)
+      ? m.items.map((it: any) => ({ ...it }))
+      : [],
+  }));
+
+  // Update items mit neuen Makros
+  for (let i = 0; i < itemsToRecalc.length; i++) {
+    const loc = itemsToRecalc[i];
+    const newMacros = parsed.items[i] || {};
+    const item = updatedMeals[loc.mealIdx].items[loc.itemIdx];
+    item.kcal = Math.round(Number(newMacros.kcal) || 0);
+    item.protein_g = Math.round(Number(newMacros.protein_g) || 0);
+    item.carbs_g = Math.round(Number(newMacros.carbs_g) || 0);
+    item.fat_g = Math.round(Number(newMacros.fat_g) || 0);
+  }
+
+  // Meal-Totals neu berechnen
+  for (const meal of updatedMeals) {
+    let kcal = 0;
+    let p = 0;
+    let c = 0;
+    let f = 0;
+    for (const it of meal.items || []) {
+      kcal += Number(it.kcal) || 0;
+      p += Number(it.protein_g) || 0;
+      c += Number(it.carbs_g) || 0;
+      f += Number(it.fat_g) || 0;
+    }
+    meal.total_kcal = Math.round(kcal);
+    meal.total_protein_g = Math.round(p);
+    meal.total_carbs_g = Math.round(c);
+    meal.total_fat_g = Math.round(f);
+  }
+
+  return { ok: true, meals: updatedMeals };
 }
 
 export async function updateMealPlanMeals(
