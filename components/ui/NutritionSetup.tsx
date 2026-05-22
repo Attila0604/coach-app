@@ -28,6 +28,7 @@ type Props = {
   customerId: string;
   foods: Food[];
   settings: Settings;
+  hasDraft?: boolean;
 };
 
 const CATEGORIES = [
@@ -53,10 +54,22 @@ const CATEGORY_ORDER = [
   "other",
 ];
 
-export function NutritionSetup({ customerId, foods, settings }: Props) {
+function tomorrowIso(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().split("T")[0];
+}
+
+export function NutritionSetup({
+  customerId,
+  foods,
+  settings,
+  hasDraft = false,
+}: Props) {
   const [foodName, setFoodName] = useState("");
   const [foodCategory, setFoodCategory] = useState("");
   const [foodNotes, setFoodNotes] = useState("");
+  const [startDate, setStartDate] = useState<string>(tomorrowIso());
   const [error, setError] = useState<string | null>(null);
   const [genSuccess, setGenSuccess] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -121,16 +134,26 @@ export function NutritionSetup({ customerId, foods, settings }: Props) {
       setError("Bitte erst Lebensmittel hinzufügen.");
       return;
     }
+    if (!startDate) {
+      setError("Bitte ein Start-Datum wählen.");
+      return;
+    }
+    if (
+      hasDraft &&
+      !confirm(
+        "Aktueller Entwurf wird ersetzt. Wirklich neuen Plan generieren?"
+      )
+    ) {
+      return;
+    }
     setError(null);
     setGenSuccess(null);
 
     startTransition(async () => {
-      const result = await generateMealPlan(customerId);
+      const result = await generateMealPlan(customerId, startDate);
       if (result.ok) {
         setGenSuccess(
-          result.summary
-            ? `Plan generiert. ${result.summary}`
-            : "Plan erfolgreich generiert!"
+          `Wochenplan (7 Tage) als Entwurf erstellt. Jetzt unten prüfen, bei Bedarf anpassen und veröffentlichen.`
         );
       } else {
         setError(result.error);
@@ -192,14 +215,37 @@ export function NutritionSetup({ customerId, foods, settings }: Props) {
 
       {/* AI Generate Button */}
       <div className="mb-6 pb-6 border-b border-white/[0.06]">
-        <button
-          type="button"
-          onClick={handleGeneratePlan}
-          disabled={isPending || foods.length === 0}
-          className="w-full text-[11px] uppercase tracking-caps font-medium px-4 py-3 border border-gold/40 text-gold hover:bg-gold/10 transition disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          {isPending ? "⏳ KI generiert…" : "✨ Tages-Plan generieren"}
-        </button>
+        <div className="flex items-end gap-3 mb-3 flex-wrap">
+          <div className="flex flex-col gap-2 min-w-[180px]">
+            <p className="text-[9px] tracking-caps uppercase text-bone-muted font-medium">
+              Plan beginnt am
+            </p>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              disabled={isPending}
+              className="bg-black/30 border border-white/10 px-3 py-2 text-sm text-bone disabled:opacity-50"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleGeneratePlan}
+            disabled={isPending || foods.length === 0 || !startDate}
+            className="flex-1 min-w-[200px] text-[11px] uppercase tracking-caps font-medium px-4 py-2.5 border border-gold/40 text-gold hover:bg-gold/10 transition disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            {isPending
+              ? "⏳ KI generiert 7 Tage…"
+              : hasDraft
+              ? "✨ Plan neu generieren"
+              : "✨ Wochenplan generieren"}
+          </button>
+        </div>
+        {hasDraft && (
+          <p className="text-[11px] text-bone-faint italic mt-1">
+            Aktueller Entwurf wird beim Neu-Generieren ersetzt.
+          </p>
+        )}
         {genSuccess && (
           <p className="text-[11px] text-gold/80 italic mt-3 leading-relaxed">
             ✓ {genSuccess}
