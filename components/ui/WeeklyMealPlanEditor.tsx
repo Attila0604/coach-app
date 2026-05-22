@@ -5,6 +5,7 @@ import {
   updateMealPlanMeals,
   publishMealPlan,
   discardMealPlanDraft,
+  recalculateMealMacros,
 } from "@/app/coach/customers/[id]/actions";
 
 type MealItem = {
@@ -50,7 +51,7 @@ export type Targets = {
 
 type Props = {
   customerId: string;
-  plans: Plan[]; // sorted by plan_date asc, all same status
+  plans: Plan[];
   targets: Targets;
 };
 
@@ -140,13 +141,13 @@ function dayTotals(meals: Meal[]) {
 }
 
 export function WeeklyMealPlanEditor({ customerId, plans, targets }: Props) {
-  // Local state mirrors all plans' meals so the coach can edit then save per day
   const [localPlans, setLocalPlans] = useState<Plan[]>(plans);
   const [dirtyDays, setDirtyDays] = useState<Set<string>>(new Set());
   const [activeIdx, setActiveIdx] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [isRecalcing, setIsRecalcing] = useState(false);
 
   const status: "draft" | "published" =
     plans.every((p) => p.status === "draft") ? "draft" : "published";
@@ -158,7 +159,6 @@ export function WeeklyMealPlanEditor({ customerId, plans, targets }: Props) {
     return `${first} – ${last}`;
   }, [plans]);
 
-  // Week averages (over 7 days)
   const weekAverages = useMemo(() => {
     if (localPlans.length === 0)
       return { kcal: 0, protein: 0, carbs: 0, fat: 0 };
@@ -188,6 +188,7 @@ export function WeeklyMealPlanEditor({ customerId, plans, targets }: Props) {
   }, [localPlans]);
 
   const activePlan = localPlans[activeIdx];
+  const busy = isPending || isRecalcing;
 
   function updateActivePlanMeals(updater: (meals: Meal[]) => Meal[]) {
     setLocalPlans((prev) =>
@@ -248,7 +249,14 @@ export function WeeklyMealPlanEditor({ customerId, plans, targets }: Props) {
               ...m,
               items: [
                 ...m.items,
-                { food: "", grams: 0, kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+                {
+                  food: "",
+                  grams: 100,
+                  kcal: 0,
+                  protein_g: 0,
+                  carbs_g: 0,
+                  fat_g: 0,
+                },
               ],
             }
           : m
@@ -284,6 +292,38 @@ export function WeeklyMealPlanEditor({ customerId, plans, targets }: Props) {
   function handleDeleteMeal(mealIdx: number) {
     if (!confirm("Mahlzeit löschen?")) return;
     updateActivePlanMeals((meals) => meals.filter((_, i) => i !== mealIdx));
+  }
+
+  async function handleRecalcDay() {
+    if (!activePlan) return;
+    if (activePlan.meals.length === 0) {
+      setError("Keine Mahlzeiten vorhanden.");
+      return;
+    }
+    setError(null);
+    setInfo(null);
+    setIsRecalcing(true);
+    try {
+      const result = await recalculateMealMacros(
+        customerId,
+        activePlan.meals
+      );
+      if (result.ok) {
+        setLocalPlans((prev) =>
+          prev.map((p, i) =>
+            i === activeIdx ? { ...p, meals: result.meals as Meal[] } : p
+          )
+        );
+        setDirtyDays((prev) => new Set(prev).add(activePlan.id));
+        setInfo(
+          "KI hat Makros aktualisiert. Jetzt prüfen und mit 'Tag speichern' sichern."
+        );
+      } else {
+        setError(result.error);
+      }
+    } finally {
+      setIsRecalcing(false);
+    }
   }
 
   function handleSaveDay() {
@@ -487,7 +527,7 @@ export function WeeklyMealPlanEditor({ customerId, plans, targets }: Props) {
                 onAddItem={() => handleAddItem(mIdx)}
                 onDeleteItem={(itemIdx) => handleDeleteItem(mIdx, itemIdx)}
                 onDelete={() => handleDeleteMeal(mIdx)}
-                disabled={isPending}
+                disabled={busy}
               />
             ))}
           </div>
@@ -495,7 +535,7 @@ export function WeeklyMealPlanEditor({ customerId, plans, targets }: Props) {
           <button
             type="button"
             onClick={handleAddMeal}
-            disabled={isPending}
+            disabled={busy}
             className="mt-5 text-[10px] uppercase tracking-caps font-medium px-4 py-2 border border-white/15 text-bone-muted hover:text-bone hover:border-white/30 transition disabled:opacity-30"
           >
             + Mahlzeit hinzufügen
@@ -504,22 +544,35 @@ export function WeeklyMealPlanEditor({ customerId, plans, targets }: Props) {
           {/* Per-day save bar */}
           <div className="mt-6 pt-5 border-t border-white/[0.06] flex items-center justify-between gap-3 flex-wrap">
             <div className="text-[11px] text-bone-faint italic">
-              {dirtyDays.has(activePlan.id)
+              {isRecalcing
+                ? "⏳ KI berechnet Makros…"
+                : dirtyDays.has(activePlan.id)
                 ? "Ungespeicherte Änderungen für diesen Tag."
                 : "Keine Änderungen."}
             </div>
-            <button
-              type="button"
-              onClick={handleSaveDay}
-              disabled={isPending || !dirtyDays.has(activePlan.id)}
-              className={`text-[10px] uppercase tracking-caps font-medium px-4 py-2 border transition ${
-                dirtyDays.has(activePlan.id)
-                  ? "border-gold/60 text-gold hover:bg-gold/10"
-                  : "border-white/10 text-bone-faint cursor-not-allowed"
-              }`}
-            >
-              {isPending ? "Speichere…" : "Tag speichern"}
-            </button>
+            <div className="flex gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={handleRecalcDay}
+                disabled={busy || activePlan.meals.length === 0}
+                className="text-[10px] uppercase tracking-caps font-medium px-3 py-2 border border-white/15 text-bone-muted hover:text-gold hover:border-gold/40 transition disabled:opacity-30 disabled:cursor-not-allowed"
+                title="KI berechnet kcal/Protein/Carbs/Fett pro Item basierend auf Name + Gramm"
+              >
+                {isRecalcing ? "⏳ KI rechnet…" : "🔄 KI nachrechnen"}
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveDay}
+                disabled={busy || !dirtyDays.has(activePlan.id)}
+                className={`text-[10px] uppercase tracking-caps font-medium px-4 py-2 border transition ${
+                  dirtyDays.has(activePlan.id) && !busy
+                    ? "border-gold/60 text-gold hover:bg-gold/10"
+                    : "border-white/10 text-bone-faint cursor-not-allowed"
+                }`}
+              >
+                {isPending ? "Speichere…" : "Tag speichern"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -531,7 +584,7 @@ export function WeeklyMealPlanEditor({ customerId, plans, targets }: Props) {
             <button
               type="button"
               onClick={handleDiscard}
-              disabled={isPending}
+              disabled={busy}
               className="text-[10px] uppercase tracking-caps font-medium px-4 py-2 border border-white/15 text-bone-muted hover:text-red-400 hover:border-red-400/40 transition disabled:opacity-30"
             >
               Entwurf verwerfen
@@ -539,7 +592,7 @@ export function WeeklyMealPlanEditor({ customerId, plans, targets }: Props) {
             <button
               type="button"
               onClick={handlePublish}
-              disabled={isPending}
+              disabled={busy}
               className="text-[11px] uppercase tracking-caps font-medium px-5 py-2.5 border border-gold text-gold bg-gold/5 hover:bg-gold/15 transition disabled:opacity-30"
             >
               ✓ Plan veröffentlichen
@@ -685,7 +738,6 @@ function MealEditor({
 
       {/* Items */}
       <div className="space-y-1.5">
-        {/* Header */}
         <div className="grid grid-cols-[1fr_56px_56px_44px_44px_44px_20px] gap-2 text-[9px] tracking-caps uppercase text-bone-faint font-medium px-1">
           <div>Lebensmittel</div>
           <div className="text-right">g</div>
@@ -761,7 +813,6 @@ function MealEditor({
         + Item
       </button>
 
-      {/* Notes */}
       <input
         type="text"
         value={meal.notes || ""}
