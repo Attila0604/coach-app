@@ -368,51 +368,25 @@ export type GenerateMealPlanResult =
   | { ok: false; error: string };
 
 const MEAL_PLAN_MODEL = "claude-sonnet-4-6";
+const MEAL_PLAN_MAX_TOKENS = 8192;
 
-const MEAL_PLAN_SYSTEM_PROMPT = `Du bist ein professioneller Ernährungs-Coach. Du erstellst 7-TAGES-PLÄNE basierend auf:
-- Den Tageszielen (gelten für JEDEN Tag der Woche)
-- Den vom Coach erlaubten Lebensmitteln
-- Dem Kundenprofil (Allergien, Vorlieben, Ziele)
+// Kompakter System-Prompt — keine `notes` mehr pro Mahlzeit (spart Tokens),
+// und expliziter Hinweis auf kompaktes JSON ohne Whitespace.
+const MEAL_PLAN_SYSTEM_PROMPT = `Du bist ein professioneller Ernährungs-Coach. Du erstellst 7-TAGES-PLÄNE.
 
-WICHTIGE REGELN:
-1. Verwende NUR Lebensmittel aus der "Erlaubten Liste" — nichts erfinden
-2. Schätze Macros möglichst präzise pro Lebensmittel (pro genannter Menge in Gramm)
-3. Pro Tag: 3-4 Mahlzeiten (Frühstück, Mittag, Abend, optional Snack)
-4. VARIIERE die Mahlzeiten über die 7 Tage — keine identischen Tage hintereinander
+REGELN:
+1. Verwende NUR Lebensmittel aus der "Erlaubten Liste"
+2. Schätze Macros möglichst präzise pro Lebensmittel
+3. Pro Tag: 3-4 Mahlzeiten
+4. VARIIERE über die 7 Tage (keine identischen Tage)
 5. Berücksichtige Allergien und Vorlieben strikt
-6. Bei wenig Auswahl: clever kombinieren, im "summary" ehrlich Hinweis geben
-7. Der "summary" Text ist NUR FÜR DEN COACH gedacht — schreibe als professionelle Notiz an den Coach
+6. summary ist NUR FÜR DEN COACH — schreibe kurze professionelle Notiz
 
-ANTWORTE AUSSCHLIESSLICH MIT VALIDEM JSON (kein Markdown, kein Vortext, kein Text danach):
+ANTWORTE AUSSCHLIESSLICH MIT VALIDEM JSON. KOMPAKT, OHNE MARKDOWN, OHNE KOMMENTARE, OHNE VORTEXT:
 
-{
-  "days": [
-    {
-      "day_index": 0,
-      "meals": [
-        {
-          "meal_type": "breakfast" | "lunch" | "dinner" | "snack",
-          "name": "Name der Mahlzeit",
-          "items": [
-            { "food": "Lebensmittel-Name (exakt aus Liste)", "grams": 100, "kcal": 165, "protein_g": 31, "carbs_g": 0, "fat_g": 4 }
-          ],
-          "total_kcal": 165,
-          "total_protein_g": 31,
-          "total_carbs_g": 0,
-          "total_fat_g": 4,
-          "notes": "Optionale Zubereitungs-Hinweise"
-        }
-      ],
-      "total_kcal": 1600,
-      "total_protein_g": 165,
-      "total_carbs_g": 220,
-      "total_fat_g": 73
-    }
-  ],
-  "summary": "Coach-Notiz zur Wochenplanung — z.B. Hinweise zur Variety, Macro-Erreichbarkeit, Empfehlungen für die Food-Library"
-}
+{"days":[{"day_index":0,"meals":[{"meal_type":"breakfast","name":"...","items":[{"food":"...","grams":100,"kcal":165,"protein_g":31,"carbs_g":0,"fat_g":4}],"total_kcal":165,"total_protein_g":31,"total_carbs_g":0,"total_fat_g":4}],"total_kcal":1600,"total_protein_g":165,"total_carbs_g":220,"total_fat_g":73}],"summary":"..."}
 
-Genau 7 days[] Einträge mit day_index 0 bis 6.`;
+Genau 7 days[] Einträge mit day_index 0 bis 6. meal_type ist einer von: breakfast, lunch, dinner, snack. Maximal 3-4 Items pro Mahlzeit. Halte Mahlzeit-Namen kurz (max 40 Zeichen).`;
 
 type FoodLite = {
   name: string;
@@ -463,7 +437,6 @@ function buildMealPlanPrompt(args: {
   const allergies = (profile.allergies || []).join(", ") || "Keine";
   const preferences = (profile.food_preferences || []).join(", ") || "Keine";
 
-  // Group foods by category
   const grouped: Record<string, FoodLite[]> = {};
   for (const food of foods) {
     const cat = food.category || "sonstiges";
@@ -480,65 +453,99 @@ function buildMealPlanPrompt(args: {
     })
     .join("\n\n");
 
-  // Build dates list for context
   const dates = Array.from({ length: 7 }, (_, i) =>
     formatDateDe(addDaysISO(startDate, i))
   );
   const datesList = dates.map((d, i) => `  Tag ${i + 1}: ${d}`).join("\n");
 
-  return `Erstelle einen 7-TAGES-PLAN beginnend mit ${formatDateDe(startDate)}.
+  return `Erstelle einen 7-TAGES-PLAN ab ${formatDateDe(startDate)}.
 
-KUNDE:
-- Name: ${customerName}
-- Alter: ${profile.age ?? "—"}, Geschlecht: ${profile.gender ?? "—"}
-- Aktuelles Gewicht: ${profile.weight_start_kg ?? "—"} kg → Ziel: ${profile.weight_target_kg ?? "—"} kg
-- Trainings-Ziel: ${profile.goal ?? "—"}
-- Allergien: ${allergies}
-- Vorlieben: ${preferences}
+KUNDE: ${customerName}, ${profile.age ?? "—"}J ${profile.gender ?? "—"}, ${
+    profile.weight_start_kg ?? "—"
+  }kg → ${profile.weight_target_kg ?? "—"}kg, Ziel: ${profile.goal ?? "—"}
+Allergien: ${allergies} | Vorlieben: ${preferences}
 
-TAGESZIELE (gelten für JEDEN der 7 Tage):
-- Kalorien: ${profile.daily_kcal_target ?? "?"} kcal
-- Protein: ${profile.protein_target_g ?? "?"} g
-- Carbs: ${profile.carbs_target_g ?? "?"} g
-- Fett: ${profile.fat_target_g ?? "?"} g
+TAGESZIELE (für JEDEN Tag): ${profile.daily_kcal_target ?? "?"} kcal, ${
+    profile.protein_target_g ?? "?"
+  }g Protein, ${profile.carbs_target_g ?? "?"}g Carbs, ${
+    profile.fat_target_g ?? "?"
+  }g Fett
 
 TAGE:
 ${datesList}
 
-ERLAUBTE LEBENSMITTEL (NUR diese verwenden):
+ERLAUBTE LEBENSMITTEL:
 ${foodsList}
 
-Erstelle 7 Tagespläne mit jeweils 3-4 Mahlzeiten. VARIIERE die Mahlzeiten über die Woche.
-Antworte AUSSCHLIESSLICH mit JSON wie im System-Prompt definiert (7 Einträge in "days").`;
-}
-
-function extractJson(text: string): any {
-  try {
-    return JSON.parse(text);
-  } catch {
-    const cleaned = text
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/```\s*$/i, "")
-      .trim();
-    try {
-      return JSON.parse(cleaned);
-    } catch {
-      const firstBrace = text.indexOf("{");
-      const lastBrace = text.lastIndexOf("}");
-      if (firstBrace !== -1 && lastBrace > firstBrace) {
-        const slice = text.slice(firstBrace, lastBrace + 1);
-        return JSON.parse(slice);
-      }
-      throw new Error("Kein gültiges JSON gefunden");
-    }
-  }
+Antworte mit dem JSON-Format aus dem System-Prompt. 7 Tage, kompakt, ohne Markdown.`;
 }
 
 /**
- * Generiert einen 7-Tage-Plan als DRAFT.
- * Vorab werden alle existierenden Drafts für diesen Kunden auf 'replaced' gesetzt.
- * Coach sieht und editiert den Draft, danach Aufruf von publishMealPlan().
+ * Robuste JSON-Extraktion: handhabt Markdown-Fences, Trailing-Commas, Vortext.
  */
+function extractJson(text: string): any {
+  // 1. Direkter Parse
+  try {
+    return JSON.parse(text);
+  } catch {
+    /* continue */
+  }
+
+  // 2. Markdown-Fences strippen
+  let cleaned = text
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    /* continue */
+  }
+
+  // 3. Substring zwischen erstem { und letztem }
+  const firstBrace = text.indexOf("{");
+  const lastBrace = text.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    cleaned = text.slice(firstBrace, lastBrace + 1);
+    try {
+      return JSON.parse(cleaned);
+    } catch {
+      /* continue */
+    }
+
+    // 4. Trailing-Commas reparieren: ", }" → " }", ", ]" → " ]"
+    const noTrailingCommas = cleaned
+      .replace(/,(\s*[}\]])/g, "$1")
+      // Auch single-line comments entfernen (// ...)
+      .replace(/\/\/[^\n]*/g, "")
+      // Block comments entfernen
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+    try {
+      return JSON.parse(noTrailingCommas);
+    } catch {
+      /* continue */
+    }
+  }
+
+  throw new Error("Kein gültiges JSON gefunden");
+}
+
+async function callMealPlanAI(args: {
+  systemPrompt: string;
+  userPrompt: string;
+  temperature: number;
+}): Promise<string> {
+  return callClaude(
+    [{ role: "user", content: args.userPrompt }],
+    {
+      model: MEAL_PLAN_MODEL,
+      maxTokens: MEAL_PLAN_MAX_TOKENS,
+      system: args.systemPrompt,
+      temperature: args.temperature,
+    }
+  );
+}
+
 export async function generateMealPlan(
   customerId: string,
   startDate: string
@@ -591,40 +598,69 @@ export async function generateMealPlan(
     };
   }
 
-  const prompt = buildMealPlanPrompt({
+  const userPrompt = buildMealPlanPrompt({
     customerName: customer.first_name || customer.telegram_username || "Kunde",
     profile,
     foods,
     startDate,
   });
 
+  // Erster Versuch
   let aiResponse: string;
   try {
-    aiResponse = await callClaude(
-      [{ role: "user", content: prompt }],
-      {
-        model: MEAL_PLAN_MODEL,
-        maxTokens: 8000,
-        system: MEAL_PLAN_SYSTEM_PROMPT,
-        temperature: 0.7,
-      }
-    );
+    aiResponse = await callMealPlanAI({
+      systemPrompt: MEAL_PLAN_SYSTEM_PROMPT,
+      userPrompt,
+      temperature: 0.7,
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { ok: false, error: `AI-Fehler: ${msg}` };
   }
 
   let parsed: any;
+  let parseError: unknown = null;
   try {
     parsed = extractJson(aiResponse);
-  } catch {
-    return {
-      ok: false,
-      error: "AI-Antwort konnte nicht geparst werden. Bitte nochmal versuchen.",
-    };
+  } catch (e) {
+    parseError = e;
+  }
+
+  // Auto-Retry mit niedriger Temperature für strikteres JSON
+  if (!parsed || !Array.isArray(parsed?.days)) {
+    console.error(
+      "[generateMealPlan] First parse failed. Raw response (first 1000 chars):",
+      aiResponse?.slice(0, 1000)
+    );
+    console.error("[generateMealPlan] Parse error:", parseError);
+
+    try {
+      aiResponse = await callMealPlanAI({
+        systemPrompt:
+          MEAL_PLAN_SYSTEM_PROMPT +
+          "\n\nWICHTIG: Letzter Versuch ergab kein valides JSON. Antworte JETZT NUR mit dem JSON-Objekt, ohne irgendwelche Zusätze.",
+        userPrompt,
+        temperature: 0.2,
+      });
+      parsed = extractJson(aiResponse);
+    } catch (e2) {
+      const preview = aiResponse?.slice(0, 200) ?? "(leer)";
+      console.error(
+        "[generateMealPlan] Retry parse failed. Raw response (first 1000 chars):",
+        aiResponse?.slice(0, 1000)
+      );
+      return {
+        ok: false,
+        error: `AI-Antwort konnte nicht geparst werden (auch nach Retry). Anfang der Antwort: "${preview}…"`,
+      };
+    }
   }
 
   if (!Array.isArray(parsed.days) || parsed.days.length !== 7) {
+    console.error(
+      "[generateMealPlan] Invalid structure. days length:",
+      Array.isArray(parsed.days) ? parsed.days.length : "not-an-array"
+    );
     return {
       ok: false,
       error: `Ungültige Plan-Struktur: erwartet 7 Tage, erhalten ${
@@ -633,14 +669,13 @@ export async function generateMealPlan(
     };
   }
 
-  // Alle existierenden Drafts dieses Kunden auf 'replaced' setzen
+  // Alte Drafts → 'replaced'
   await supabase
     .from("meal_plans")
     .update({ status: "replaced", updated_at: new Date().toISOString() })
     .eq("customer_id", customerId)
     .eq("status", "draft");
 
-  // 7 neue Drafts einfügen
   const rows = parsed.days.map((day: any, i: number) => ({
     customer_id: customerId,
     coach_id: auth.coachId,
@@ -652,7 +687,6 @@ export async function generateMealPlan(
     total_carbs_g: day.total_carbs_g ?? null,
     total_fat_g: day.total_fat_g ?? null,
     ai_model: MEAL_PLAN_MODEL,
-    // ai_summary nur auf dem ersten Tag speichern (gilt für die ganze Woche)
     ai_summary: i === 0 ? parsed.summary ?? null : null,
     status: "draft",
   }));
@@ -672,10 +706,6 @@ export async function generateMealPlan(
   };
 }
 
-/**
- * Coach editiert einen einzelnen Tag (Mahlzeiten anpassen).
- * Totals werden serverseitig aus den Items neu berechnet.
- */
 export async function updateMealPlanMeals(
   planId: string,
   customerId: string,
@@ -691,7 +721,6 @@ export async function updateMealPlanMeals(
   const auth = await verifyCoachOwnsCustomer(customerId);
   if (!auth.ok) return auth;
 
-  // Recalculate totals from items
   let totalKcal = 0;
   let totalProtein = 0;
   let totalCarbs = 0;
@@ -722,7 +751,6 @@ export async function updateMealPlanMeals(
 
   const supabase = createClient();
 
-  // Verify the plan belongs to this customer
   const { data: plan } = await supabase
     .from("meal_plans")
     .select("id, customer_id, status")
@@ -754,10 +782,6 @@ export async function updateMealPlanMeals(
   return { ok: true };
 }
 
-/**
- * Coach veröffentlicht alle aktuellen Draft-Pläne dieses Kunden.
- * Existierende published Pläne für die gleichen Daten werden auf 'replaced' gesetzt.
- */
 export async function publishMealPlan(
   customerId: string
 ): Promise<MealPlanResult> {
@@ -780,7 +804,6 @@ export async function publishMealPlan(
 
   const draftDates = drafts.map((d) => d.plan_date);
 
-  // Vorhandene published Pläne für diese Daten auf 'replaced' setzen
   await supabase
     .from("meal_plans")
     .update({ status: "replaced", updated_at: new Date().toISOString() })
@@ -788,7 +811,6 @@ export async function publishMealPlan(
     .eq("status", "published")
     .in("plan_date", draftDates);
 
-  // Drafts veröffentlichen
   const { error } = await supabase
     .from("meal_plans")
     .update({ status: "published", updated_at: new Date().toISOString() })
@@ -801,9 +823,6 @@ export async function publishMealPlan(
   return { ok: true };
 }
 
-/**
- * Coach verwirft den aktuellen Draft-Plan ohne zu veröffentlichen.
- */
 export async function discardMealPlanDraft(
   customerId: string
 ): Promise<MealPlanResult> {
