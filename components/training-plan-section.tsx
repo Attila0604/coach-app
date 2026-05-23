@@ -1,9 +1,11 @@
 // ============================================================================
-// Training Plan Section — Server Component
+// Training Plan Section — Server Component V3
 // 
-// Lädt den aktuellen (oder einzigen) Plan eines Kunden inklusive aller 
-// Tage und Übungen in einem einzigen Query, und reicht das an den 
-// Client-Editor durch.
+// Lädt den aktuellen Plan (max 1 pro Customer, status in draft/active/paused).
+// Zeigt:
+//   - KI-Generator (wenn kein Plan)
+//   - Status-Bar mit Activate/Discard Buttons (wenn Plan existiert)
+//   - Den bestehenden TrainingPlanEditor (unverändert)
 // 
 // EINBINDUNG in deine bestehende Kunden-Detail-Seite:
 //   import TrainingPlanSection from '@/components/training-plan-section';
@@ -13,6 +15,8 @@
 
 import { createClient } from '@/lib/supabase-server';
 import TrainingPlanEditor from './training-plan-editor';
+import TrainingPlanGenerator from './ui/TrainingPlanGenerator';
+import TrainingPlanStatusBar from './ui/TrainingPlanStatusBar';
 import type { TrainingPlan } from '@/lib/types/training';
 
 export default async function TrainingPlanSection({
@@ -22,8 +26,7 @@ export default async function TrainingPlanSection({
 }) {
   const supabase = createClient();
 
-  // Lade den aktivsten Plan (active > paused > draft > completed)
-  // Falls mehrere existieren, nimm den zuletzt aktualisierten
+  // Lade nur aktive/draft/paused Pläne — completed sind archiviert und werden nicht angezeigt
   const { data, error } = await supabase
     .from('training_plans')
     .select(
@@ -36,6 +39,7 @@ export default async function TrainingPlanSection({
     `
     )
     .eq('customer_id', customerId)
+    .in('status', ['draft', 'active', 'paused'])
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -44,7 +48,6 @@ export default async function TrainingPlanSection({
     console.error('Fehler beim Laden des Plans:', error);
   }
 
-  // Sortiere Tage und Übungen
   const plan: TrainingPlan | null = data
     ? {
         ...data,
@@ -59,5 +62,26 @@ export default async function TrainingPlanSection({
       }
     : null;
 
-  return <TrainingPlanEditor customerId={customerId} plan={plan} />;
+  return (
+    <div className="space-y-8">
+      {/* KI-Generator immer sichtbar */}
+      <TrainingPlanGenerator
+        customerId={customerId}
+        hasExistingPlan={!!plan}
+      />
+
+      {/* Wenn Plan existiert: Status-Bar + Editor */}
+      {plan && (
+        <>
+          <TrainingPlanStatusBar
+            planId={plan.id}
+            customerId={customerId}
+            status={plan.status}
+            planName={plan.name}
+          />
+          <TrainingPlanEditor customerId={customerId} plan={plan} />
+        </>
+      )}
+    </div>
+  );
 }
