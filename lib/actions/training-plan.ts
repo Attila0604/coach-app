@@ -2,6 +2,8 @@
 
 // ============================================================================
 // Server Actions: Training Plans — V3 mit KI-Generator + Approval-Workflow
+// HINWEIS: In 'use server' Files dürfen nur async functions exportiert werden.
+// Types und Constants sind privat (nicht-exportiert).
 // ============================================================================
 
 import { createClient } from '@/lib/supabase-server';
@@ -13,14 +15,14 @@ async function getCoachId() {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Nicht angemeldet');
-  
+
   const { data: coach } = await supabase
     .from('coaches')
     .select('id')
     .eq('user_id', user.id)
     .single();
   if (!coach) throw new Error('Coach nicht gefunden');
-  
+
   return coach.id as string;
 }
 
@@ -31,7 +33,7 @@ async function getCoachId() {
 export async function createPlan(customerId: string) {
   const supabase = createClient();
   const coachId = await getCoachId();
-  
+
   const { data: plan, error } = await supabase
     .from('training_plans')
     .insert({
@@ -45,14 +47,14 @@ export async function createPlan(customerId: string) {
     .select()
     .single();
   if (error) throw error;
-  
+
   await supabase.from('training_days').insert({
     plan_id: plan.id,
     day_number: 1,
     title: 'Tag 1',
     sort_order: 0,
   });
-  
+
   revalidatePath(`/customers/${customerId}`);
   return plan;
 }
@@ -93,17 +95,17 @@ export async function deletePlan(planId: string, customerId: string) {
 
 export async function addDay(planId: string, customerId: string) {
   const supabase = createClient();
-  
+
   const { data: existing } = await supabase
     .from('training_days')
     .select('day_number, sort_order')
     .eq('plan_id', planId)
     .order('day_number', { ascending: false })
     .limit(1);
-  
+
   const nextNumber = (existing?.[0]?.day_number ?? 0) + 1;
   const nextSort = (existing?.[0]?.sort_order ?? -1) + 1;
-  
+
   const { data: day, error } = await supabase
     .from('training_days')
     .insert({
@@ -115,7 +117,7 @@ export async function addDay(planId: string, customerId: string) {
     .select()
     .single();
   if (error) throw error;
-  
+
   revalidatePath(`/customers/${customerId}`);
   return day;
 }
@@ -143,7 +145,6 @@ export async function deleteDay(dayId: string, customerId: string) {
   revalidatePath(`/customers/${customerId}`);
 }
 
-// Tag mit allen Übungen duplizieren — Wochentag + Uhrzeit werden vom Aufrufer gesetzt
 export async function duplicateDay(
   dayId: string,
   customerId: string,
@@ -153,29 +154,29 @@ export async function duplicateDay(
   }
 ) {
   const supabase = createClient();
-  
+
   const { data: srcDay, error: dayErr } = await supabase
     .from('training_days')
     .select('*, exercises(*)')
     .eq('id', dayId)
     .single();
   if (dayErr) throw dayErr;
-  
+
   const { data: existing } = await supabase
     .from('training_days')
     .select('day_number, sort_order')
     .eq('plan_id', srcDay.plan_id)
     .order('day_number', { ascending: false })
     .limit(1);
-  
+
   const nextNumber = (existing?.[0]?.day_number ?? 0) + 1;
   const nextSort = (existing?.[0]?.sort_order ?? -1) + 1;
-  
+
   const targetWeekday =
     options?.weekday !== undefined ? options.weekday : srcDay.weekday;
   const targetTime =
     options?.time_of_day !== undefined ? options.time_of_day : srcDay.time_of_day;
-  
+
   const { data: newDay, error: insErr } = await supabase
     .from('training_days')
     .insert({
@@ -190,7 +191,7 @@ export async function duplicateDay(
     .select()
     .single();
   if (insErr) throw insErr;
-  
+
   const exercises = (srcDay.exercises ?? []) as any[];
   if (exercises.length > 0) {
     const exerciseInserts = exercises.map(e => ({
@@ -208,7 +209,7 @@ export async function duplicateDay(
     const { error: exErr } = await supabase.from('exercises').insert(exerciseInserts);
     if (exErr) throw exErr;
   }
-  
+
   revalidatePath(`/customers/${customerId}`);
   return newDay;
 }
@@ -219,16 +220,16 @@ export async function duplicateDay(
 
 export async function addExercise(dayId: string, customerId: string) {
   const supabase = createClient();
-  
+
   const { data: existing } = await supabase
     .from('exercises')
     .select('sort_order')
     .eq('day_id', dayId)
     .order('sort_order', { ascending: false })
     .limit(1);
-  
+
   const nextSort = (existing?.[0]?.sort_order ?? -1) + 1;
-  
+
   const { data: ex, error } = await supabase
     .from('exercises')
     .insert({
@@ -244,7 +245,7 @@ export async function addExercise(dayId: string, customerId: string) {
     .select()
     .single();
   if (error) throw error;
-  
+
   revalidatePath(`/customers/${customerId}`);
   return ex;
 }
@@ -278,21 +279,21 @@ export async function deleteExercise(exerciseId: string, customerId: string) {
 
 export async function duplicateExercise(exerciseId: string, customerId: string) {
   const supabase = createClient();
-  
+
   const { data: src, error: srcErr } = await supabase
     .from('exercises')
     .select('*')
     .eq('id', exerciseId)
     .single();
   if (srcErr) throw srcErr;
-  
+
   const { data: laterExercises } = await supabase
     .from('exercises')
     .select('id, sort_order')
     .eq('day_id', src.day_id)
     .gt('sort_order', src.sort_order)
     .order('sort_order', { ascending: true });
-  
+
   if (laterExercises && laterExercises.length > 0) {
     for (const ex of laterExercises) {
       await supabase
@@ -301,7 +302,7 @@ export async function duplicateExercise(exerciseId: string, customerId: string) 
         .eq('id', ex.id);
     }
   }
-  
+
   const { data: copy, error: insErr } = await supabase
     .from('exercises')
     .insert({
@@ -319,7 +320,7 @@ export async function duplicateExercise(exerciseId: string, customerId: string) 
     .select()
     .single();
   if (insErr) throw insErr;
-  
+
   revalidatePath(`/customers/${customerId}`);
   return copy;
 }
@@ -330,14 +331,14 @@ export async function moveExercise(
   direction: 'up' | 'down'
 ) {
   const supabase = createClient();
-  
+
   const { data: ex, error: exErr } = await supabase
     .from('exercises')
     .select('id, day_id, sort_order')
     .eq('id', exerciseId)
     .single();
   if (exErr) throw exErr;
-  
+
   const { data: neighbor } = await supabase
     .from('exercises')
     .select('id, sort_order')
@@ -346,9 +347,9 @@ export async function moveExercise(
     [direction === 'up' ? 'lt' : 'gt']('sort_order', ex.sort_order)
     .limit(1)
     .maybeSingle();
-  
+
   if (!neighbor) return;
-  
+
   await supabase
     .from('exercises')
     .update({ sort_order: neighbor.sort_order })
@@ -357,7 +358,7 @@ export async function moveExercise(
     .from('exercises')
     .update({ sort_order: ex.sort_order })
     .eq('id', neighbor.id);
-  
+
   revalidatePath(`/customers/${customerId}`);
 }
 
@@ -365,18 +366,19 @@ export async function moveExercise(
 // AI GENERATOR + APPROVAL WORKFLOW
 // ============================================================================
 
-export type GenerateOpts = {
+// PRIVATE Types — NICHT exportieren (verboten in 'use server' files)
+type GenerateOpts = {
   weeks: 4 | 8 | 12;
   daysPerWeek: 2 | 3 | 4 | 5 | 6;
   focus: 'strength' | 'hypertrophy' | 'general' | 'endurance' | 'custom';
   customPrompt?: string;
 };
 
-export type GenerateResult =
+type GenerateResult =
   | { ok: true; planId: string }
   | { ok: false; error: string };
 
-export type ActionResult =
+type ActionResult =
   | { ok: true }
   | { ok: false; error: string };
 
@@ -460,7 +462,6 @@ export async function generateTrainingPlan(
 
   const isAdmin = coach.role === 'admin';
 
-  // Customer ownership check (with admin override)
   let customerCheck = supabase
     .from('customers')
     .select('id, first_name, telegram_username')
@@ -469,14 +470,12 @@ export async function generateTrainingPlan(
   const { data: customer } = await customerCheck.maybeSingle();
   if (!customer) return { ok: false, error: 'Kunde nicht gefunden oder keine Berechtigung.' };
 
-  // Load profile for KI context
   const { data: profile } = await supabase
     .from('customer_profiles')
     .select('age, gender, height_cm, weight_start_kg, weight_target_kg, goal, experience_level, equipment, allergies, notes')
     .eq('customer_id', customerId)
     .maybeSingle();
 
-  // Build prompt
   const customerName = customer.first_name || customer.telegram_username || 'Kunde';
   const userPrompt = `Erstelle einen Trainingsplan für folgenden Kunden:
 
@@ -495,7 +494,6 @@ COACH-VORGABEN:
 
 Erstelle den Plan mit ${opts.daysPerWeek} Tagen. Antworte mit JSON gemäß System-Prompt.`;
 
-  // Call AI
   let aiResponse: string;
   try {
     aiResponse = await callClaude(
@@ -517,7 +515,6 @@ Erstelle den Plan mit ${opts.daysPerWeek} Tagen. Antworte mit JSON gemäß Syste
     parsed = extractJson(aiResponse);
   } catch {
     console.error('[generateTrainingPlan] Parse failed. Raw response:', aiResponse?.slice(0, 1000));
-    // Auto-retry mit niedriger temperature
     try {
       aiResponse = await callClaude(
         [{ role: 'user', content: userPrompt }],
@@ -542,14 +539,12 @@ Erstelle den Plan mit ${opts.daysPerWeek} Tagen. Antworte mit JSON gemäß Syste
     return { ok: false, error: `Erwartet ${opts.daysPerWeek} Tage, KI hat ${parsed.days.length} geliefert.` };
   }
 
-  // Alte Pläne dieses Customers auf 'completed' setzen (Verlauf erhalten, aber nicht mehr aktiv)
   await supabase
     .from('training_plans')
     .update({ status: 'completed', updated_at: new Date().toISOString() })
     .eq('customer_id', customerId)
     .in('status', ['draft', 'active', 'paused']);
 
-  // Neuen Plan erstellen
   const planName = String(parsed.plan.name).slice(0, 80);
   const { data: newPlan, error: planErr } = await supabase
     .from('training_plans')
@@ -568,7 +563,6 @@ Erstelle den Plan mit ${opts.daysPerWeek} Tagen. Antworte mit JSON gemäß Syste
     .single();
   if (planErr || !newPlan) return { ok: false, error: planErr?.message || 'Plan-Insert fehlgeschlagen.' };
 
-  // Days + Exercises einfügen
   for (let i = 0; i < parsed.days.length; i++) {
     const day = parsed.days[i];
     const { data: newDay, error: dayErr } = await supabase
@@ -606,7 +600,7 @@ Erstelle den Plan mit ${opts.daysPerWeek} Tagen. Antworte mit JSON gemäß Syste
           sets,
           reps_min: repsMin,
           reps_max: repsMax,
-          weight_kg: null, // Coach setzt selbst
+          weight_kg: null,
           weight_type: wt,
           notes: e.notes ? String(e.notes).slice(0, 200) : null,
           rest_seconds: rest,
@@ -639,7 +633,6 @@ export async function activateTrainingPlan(
     .maybeSingle();
   if (!coach) return { ok: false, error: 'Kein Coach-Konto.' };
 
-  // Verify plan ownership (admin override)
   const { data: plan } = await supabase
     .from('training_plans')
     .select('id, coach_id, customer_id, status')
