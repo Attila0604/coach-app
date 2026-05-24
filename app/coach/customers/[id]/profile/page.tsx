@@ -1,6 +1,7 @@
 import CustomerHeader from '@/components/ui/CustomerHeader';
 import { GoalsEditor } from '@/components/ui/GoalsEditor';
 import { CoachNotesEditor } from '@/components/ui/CoachNotesEditor';
+import { ProfileEditor } from '@/components/ui/ProfileEditor';
 import { getCustomerForCoach } from '@/lib/coach-customer-helpers';
 
 export default async function CustomerProfilePage({
@@ -13,9 +14,7 @@ export default async function CustomerProfilePage({
   const [profileRes, notesRes] = await Promise.all([
     supabase
       .from('customer_profiles')
-      .select(
-        'daily_kcal_target, protein_target_g, carbs_target_g, fat_target_g'
-      )
+      .select('*')
       .eq('customer_id', params.id)
       .maybeSingle(),
     supabase
@@ -47,9 +46,18 @@ export default async function CustomerProfilePage({
       </p>
 
       <div className="space-y-8">
+        {/* Persönliche Daten + Trainings-Profil */}
         <div className="bg-ink-900 p-7">
           <h3 className="text-[9px] tracking-caps uppercase text-bone-muted font-medium mb-5">
-            Tagesziele
+            Persönliche Daten & Trainings-Profil
+          </h3>
+          <ProfileEditor customerId={params.id} profile={profile} />
+        </div>
+
+        {/* Tagesziele */}
+        <div className="bg-ink-900 p-7">
+          <h3 className="text-[9px] tracking-caps uppercase text-bone-muted font-medium mb-5">
+            Tagesziele (Ernährung)
           </h3>
           <GoalsEditor
             customerId={params.id}
@@ -66,6 +74,7 @@ export default async function CustomerProfilePage({
           />
         </div>
 
+        {/* Coach-Notizen */}
         <div className="bg-ink-900 p-7">
           <h3 className="text-[9px] tracking-caps uppercase text-bone-muted font-medium mb-5">
             Coach-Notizen
