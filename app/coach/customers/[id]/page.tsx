@@ -56,7 +56,7 @@ export default async function CustomerDetailPage({
       .select('id, direction, content, agent_name, created_at')
       .eq('customer_id', params.id)
       .order('created_at', { ascending: false })
-      .limit(8),
+      .limit(3),
     supabase
       .from('coach_notes')
       .select('id, content, created_at')
@@ -91,7 +91,8 @@ export default async function CustomerDetailPage({
   const activeTrainingPlan = activeTrainingPlanRes.data;
   const activeMealPlan = activeMealPlanRes.data;
 
-  const recentLogs = logs30.slice(0, 8);
+  // Preview: nur letzte 3 Mahlzeiten (statt 8)
+  const recentLogs = logs30.slice(0, 3);
 
   type DayBucket = {
     kcal: number;
@@ -176,7 +177,6 @@ export default async function CustomerDetailPage({
         <StatusBadge status={customer.status} />
       </div>
 
-      {/* HEUTE: ProgressRing + 3 MacroBars */}
       <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8 md:gap-12 items-center py-10 border-y border-white/[0.06] mb-0">
         <ProgressRing
           value={today.kcal}
@@ -219,7 +219,6 @@ export default async function CustomerDetailPage({
         />
       </StatStrip>
 
-      {/* AKTIVE PLÄNE */}
       <Section title="Aktive Pläne" topMargin>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-white/[0.06]">
           <Panel title="Ernährung">
@@ -263,7 +262,6 @@ export default async function CustomerDetailPage({
         </div>
       </Section>
 
-      {/* COACH-NOTIZ Quick-View */}
       {activeNote && (
         <Section title="Coach-Notiz" topMargin>
           <div className="bg-ink-900 p-7">
@@ -280,7 +278,6 @@ export default async function CustomerDetailPage({
         </Section>
       )}
 
-      {/* CHARTS: Verlauf 30 Tage */}
       <Section title="Verlauf · 30 Tage" topMargin>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <KcalLast7Chart
@@ -300,7 +297,6 @@ export default async function CustomerDetailPage({
         </div>
       </Section>
 
-      {/* PROFIL + LETZTE AKTIVITÄT */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-px bg-white/[0.06] mt-12">
         <Panel title="Profil">
           {profile ? (
@@ -356,52 +352,63 @@ export default async function CustomerDetailPage({
           )}
         </Panel>
 
-        <Panel title={`Letzte Mahlzeiten · ${recentLogs.length}`}>
-          {recentLogs.length === 0 ? (
-            <Empty>Noch keine Logs.</Empty>
+        <Panel title="Letzte Aktivität">
+          {recentLogs.length === 0 && messages.length === 0 ? (
+            <Empty>Noch keine Aktivität.</Empty>
           ) : (
-            <div>
-              {recentLogs.map((l) => (
-                <MealRow
-                  key={l.id}
-                  type={l.meal_type}
-                  description={l.raw_description}
-                  protein={l.protein_g != null ? Number(l.protein_g) : null}
-                  carbs={l.carbs_g != null ? Number(l.carbs_g) : null}
-                  fat={l.fat_g != null ? Number(l.fat_g) : null}
-                  kcal={l.total_kcal}
-                  loggedAt={l.logged_at}
-                />
-              ))}
-            </div>
-          )}
-        </Panel>
-
-        <Panel title={`Letzte Nachrichten · ${messages.length}`}>
-          {messages.length === 0 ? (
-            <Empty>Noch keine Nachrichten.</Empty>
-          ) : (
-            <div>
-              {messages.map((m) => (
-                <MessageRow
-                  key={m.id}
-                  direction={m.direction}
-                  content={m.content}
-                  agentName={m.agent_name}
-                  createdAt={m.created_at}
-                />
-              ))}
-            </div>
+            <>
+              {recentLogs.length > 0 && (
+                <div className="mb-6">
+                  <p className="text-[10px] tracking-caps uppercase text-bone-faint font-medium mb-3">
+                    Mahlzeiten
+                  </p>
+                  {recentLogs.map((l) => (
+                    <MealRow
+                      key={l.id}
+                      type={l.meal_type}
+                      description={l.raw_description}
+                      protein={l.protein_g != null ? Number(l.protein_g) : null}
+                      carbs={l.carbs_g != null ? Number(l.carbs_g) : null}
+                      fat={l.fat_g != null ? Number(l.fat_g) : null}
+                      kcal={l.total_kcal}
+                      loggedAt={l.logged_at}
+                    />
+                  ))}
+                </div>
+              )}
+              {messages.length > 0 && (
+                <div>
+                  <p className="text-[10px] tracking-caps uppercase text-bone-faint font-medium mb-3">
+                    Nachrichten
+                  </p>
+                  {messages.map((m) => (
+                    <MessageRow
+                      key={m.id}
+                      direction={m.direction}
+                      content={m.content}
+                      agentName={m.agent_name}
+                      createdAt={m.created_at}
+                    />
+                  ))}
+                </div>
+              )}
+              <Link
+                href={`/coach/customers/${params.id}/activity`}
+                className="inline-block mt-5 text-[10px] uppercase tracking-caps text-gold/80 hover:text-gold transition font-medium"
+              >
+                → Alle Aktivitäten anzeigen
+              </Link>
+            </>
           )}
         </Panel>
       </div>
 
-      {/* GROSSE NAV-BUTTONS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-white/[0.06] mt-12">
+      {/* 4 NAV-CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-px bg-white/[0.06] mt-12">
         <NavCard
           href={`/coach/customers/${params.id}/profile`}
           title="Profil"
-          subtitle="Tagesziele & Coach-Notizen"
+          subtitle="Tagesziele & Notizen"
         />
         <NavCard
           href={`/coach/customers/${params.id}/nutrition`}
@@ -412,6 +419,11 @@ export default async function CustomerDetailPage({
           href={`/coach/customers/${params.id}/training`}
           title="Training"
           subtitle="KI-Generator + Editor"
+        />
+        <NavCard
+          href={`/coach/customers/${params.id}/activity`}
+          title="Aktivität"
+          subtitle="Verlauf & Nachrichten"
         />
       </div>
     </div>
