@@ -224,7 +224,7 @@ export default async function CustomerDetailPage({
         />
       </StatStrip>
 
-      {/* AKTIVE PLÄNE — Quick-Übersicht mit Links */}
+      {/* AKTIVE PLÄNE */}
       <Section title="Aktive Pläne" topMargin>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-white/[0.06]">
           <Panel title="Ernährung">
@@ -268,7 +268,7 @@ export default async function CustomerDetailPage({
         </div>
       </Section>
 
-      {/* COACH-NOTIZ Quick-View (nur read, edit auf Profil-Page) */}
+      {/* COACH-NOTIZ Quick-View */}
       {activeNote && (
         <Section title="Coach-Notiz" topMargin>
           <div className="bg-ink-900 p-7">
@@ -287,68 +287,96 @@ export default async function CustomerDetailPage({
 
       <Section title="Verlauf · 30 Tage" topMargin>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <KcalLast7Chart data={days7} target={planTargets.kcal} />
-          <MacroBreakdown macros={macro7} />
+          <KcalLast7Chart
+            data={days7}
+            target={profile?.daily_kcal_target ?? null}
+          />
+          <MacroBreakdown
+            protein={macro7.protein}
+            carbs={macro7.carbs}
+            fat={macro7.fat}
+          />
           <StreakHeatmap data={days30} />
           <WeightProgress
             start={profile?.weight_start_kg ?? null}
             target={profile?.weight_target_kg ?? null}
-            current={profile?.weight_current_kg ?? null}
           />
         </div>
       </Section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-px bg-white/[0.06] mt-12">
         <Panel title="Profil">
-          <dl className="divide-y divide-white/[0.06]">
-            <ProfileRow label="Status">
-              {STATUS_LABELS[customer.status] ?? customer.status}
-            </ProfileRow>
-            <ProfileRow label="Onboarded">
-              {formatDate(customer.onboarded_at)}
-            </ProfileRow>
-            <ProfileRow label="Ziel">{labelGoal(profile?.goal ?? null)}</ProfileRow>
-            <ProfileRow label="Erfahrung">
-              {profile?.experience_level ?? '—'}
-            </ProfileRow>
-            <ProfileRow label="Equipment">
-              {profile?.equipment ?? '—'}
-            </ProfileRow>
-            <ProfileRow label="Allergien">
-              {profile?.allergies ?? '—'}
-            </ProfileRow>
-            <ProfileRow label="Größe">
-              {profile?.height_cm ? `${profile.height_cm} cm` : '—'}
-            </ProfileRow>
-            <ProfileRow label="Gewicht">
-              {profile?.weight_start_kg
-                ? `${profile.weight_start_kg} kg → ${profile?.weight_target_kg ?? '—'} kg`
-                : '—'}
-            </ProfileRow>
-          </dl>
-          <Link
-            href={`/coach/customers/${params.id}/profile`}
-            className="inline-block mt-5 text-[10px] uppercase tracking-caps text-gold/80 hover:text-gold transition font-medium"
-          >
-            → Profil bearbeiten
-          </Link>
+          {profile ? (
+            <>
+              <dl className="divide-y divide-white/[0.06]">
+                <ProfileRow label="Alter">{profile.age ?? '—'}</ProfileRow>
+                <ProfileRow label="Geschlecht">
+                  {profile.gender ?? '—'}
+                </ProfileRow>
+                <ProfileRow label="Größe">
+                  {profile.height_cm ? `${profile.height_cm} cm` : '—'}
+                </ProfileRow>
+                <ProfileRow label="Gewicht">
+                  {profile.weight_start_kg
+                    ? `${profile.weight_start_kg} kg`
+                    : '—'}
+                  {profile.weight_target_kg ? (
+                    <>
+                      <span className="mx-2 text-bone-muted">→</span>
+                      <span className="text-gold-soft">
+                        {profile.weight_target_kg} kg
+                      </span>
+                    </>
+                  ) : null}
+                </ProfileRow>
+                <ProfileRow label="Ziel">
+                  {labelGoal(profile.goal)}
+                </ProfileRow>
+                <ProfileRow label="Erfahrung">
+                  {profile.experience_level ?? '—'}
+                </ProfileRow>
+                <ProfileRow label="Equipment">
+                  {profile.equipment ?? '—'}
+                </ProfileRow>
+                <ProfileRow label="Allergien">
+                  {profile.allergies && profile.allergies.length > 0
+                    ? profile.allergies.join(', ')
+                    : 'Keine'}
+                </ProfileRow>
+                <ProfileRow label="Onboarded">
+                  {formatDate(customer.onboarded_at)}
+                </ProfileRow>
+              </dl>
+              <Link
+                href={`/coach/customers/${params.id}/profile`}
+                className="inline-block mt-5 text-[10px] uppercase tracking-caps text-gold/80 hover:text-gold transition font-medium"
+              >
+                → Profil bearbeiten
+              </Link>
+            </>
+          ) : (
+            <Empty>Noch kein Profil — Intake nicht abgeschlossen.</Empty>
+          )}
         </Panel>
 
         <Panel title={`Letzte Mahlzeiten · ${recentLogs.length}`}>
           {recentLogs.length === 0 ? (
             <Empty>Noch keine Logs.</Empty>
           ) : (
-            <ul className="divide-y divide-white/[0.06]">
-              {recentLogs.map((log) => (
+            <div>
+              {recentLogs.map((l) => (
                 <MealRow
-                  key={log.id}
-                  meal_type={log.meal_type}
-                  description={log.raw_description}
-                  kcal={log.total_kcal}
-                  logged_at={log.logged_at}
+                  key={l.id}
+                  type={l.meal_type}
+                  description={l.raw_description}
+                  protein={l.protein_g != null ? Number(l.protein_g) : null}
+                  carbs={l.carbs_g != null ? Number(l.carbs_g) : null}
+                  fat={l.fat_g != null ? Number(l.fat_g) : null}
+                  kcal={l.total_kcal}
+                  loggedAt={l.logged_at}
                 />
               ))}
-            </ul>
+            </div>
           )}
         </Panel>
 
@@ -356,27 +384,27 @@ export default async function CustomerDetailPage({
           {messages.length === 0 ? (
             <Empty>Noch keine Nachrichten.</Empty>
           ) : (
-            <ul className="divide-y divide-white/[0.06]">
+            <div>
               {messages.map((m) => (
                 <MessageRow
                   key={m.id}
                   direction={m.direction}
                   content={m.content}
-                  agent_name={m.agent_name}
-                  created_at={m.created_at}
+                  agentName={m.agent_name}
+                  createdAt={m.created_at}
                 />
               ))}
-            </ul>
+            </div>
           )}
         </Panel>
       </div>
 
-      {/* GROßE NAV-BUTTONS unten */}
+      {/* GROSSE NAV-BUTTONS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-white/[0.06] mt-12">
         <NavCard
           href={`/coach/customers/${params.id}/profile`}
           title="Profil"
-          subtitle="Ziele, Equipment, Notizen"
+          subtitle="Tagesziele & Coach-Notizen"
         />
         <NavCard
           href={`/coach/customers/${params.id}/nutrition`}
