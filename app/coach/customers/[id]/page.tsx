@@ -1,95 +1,24 @@
-import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase-server";
+import Link from 'next/link';
 import {
   KcalLast7Chart,
   StreakHeatmap,
   MacroBreakdown,
   WeightProgress,
-} from "./charts";
-import { ProgressRing } from "@/components/ui/ProgressRing";
-import { MacroBar } from "@/components/ui/MacroBar";
-import { StatStrip, StatCell } from "@/components/ui/StatStrip";
-import { MealRow } from "@/components/ui/MealRow";
-import { MessageRow } from "@/components/ui/MessageRow";
-import { GoalsEditor } from "@/components/ui/GoalsEditor";
-import { CoachNotesEditor } from "@/components/ui/CoachNotesEditor";
-import { NutritionSetup } from "@/components/ui/NutritionSetup";
+} from './charts';
+import { ProgressRing } from '@/components/ui/ProgressRing';
+import { MacroBar } from '@/components/ui/MacroBar';
+import { StatStrip, StatCell } from '@/components/ui/StatStrip';
+import { MealRow } from '@/components/ui/MealRow';
+import { MessageRow } from '@/components/ui/MessageRow';
 import {
-  WeeklyMealPlanEditor,
-  type Plan as MealPlan,
-} from "@/components/ui/WeeklyMealPlanEditor";
-import TrainingPlanSection from "@/components/training-plan-section";
-
-const TZ = "Europe/Vienna";
-
-const GOAL_LABELS: Record<string, string> = {
-  endurance: "Ausdauer",
-  ausdauer: "Ausdauer",
-  strength: "Kraft",
-  kraft: "Kraft",
-  weight_loss: "Abnehmen",
-  abnehmen: "Abnehmen",
-  muscle_gain: "Muskelaufbau",
-  aufbau: "Muskelaufbau",
-  maintenance: "Erhalt",
-  erhalt: "Erhalt",
-  health: "Gesundheit",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  active: "Aktiv",
-  intake: "Onboarding",
-  paused: "Pausiert",
-  archived: "Archiviert",
-};
-
-function labelGoal(g: string | null): string {
-  if (!g) return "—";
-  return GOAL_LABELS[g.toLowerCase()] ?? g;
-}
-
-function formatDate(d: string | null): string {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("de-DE", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-function viennaDay(d: Date): string {
-  return d.toLocaleDateString("sv-SE", { timeZone: TZ });
-}
-
-function buildWindow() {
-  const todayKey = viennaDay(new Date());
-  const anchor = new Date(`${todayKey}T12:00:00Z`);
-
-  const dayKeys: string[] = [];
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(anchor);
-    d.setUTCDate(anchor.getUTCDate() - i);
-    dayKeys.push(viennaDay(d));
-  }
-
-  const queryFrom = new Date();
-  queryFrom.setUTCDate(queryFrom.getUTCDate() - 31);
-  queryFrom.setUTCHours(0, 0, 0, 0);
-
-  return { dayKeys, todayKey, queryFrom };
-}
-
-function computeStreak(
-  days30: Array<{ date: string; logCount: number }>
-): number {
-  let streak = 0;
-  for (let i = days30.length - 1; i >= 0; i--) {
-    if (days30[i].logCount > 0) streak++;
-    else break;
-  }
-  return streak;
-}
+  getCustomerForCoach,
+  buildWindow,
+  computeStreak,
+  viennaDay,
+  labelGoal,
+  formatDate,
+  STATUS_LABELS,
+} from '@/lib/coach-customer-helpers';
 
 type Params = { id: string };
 
@@ -98,104 +27,69 @@ export default async function CustomerDetailPage({
 }: {
   params: Params;
 }) {
-  const supabase = createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { data: coach } = await supabase
-    .from("coaches")
-    .select("id, role")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (!coach) notFound();
-
-  const isAdmin = coach.role === "admin";
-
-  let customerQuery = supabase
-    .from("customers")
-    .select(
-      "id, first_name, telegram_username, telegram_chat_id, status, onboarded_at, created_at, coach_id"
-    )
-    .eq("id", params.id);
-
-  if (!isAdmin) {
-    customerQuery = customerQuery.eq("coach_id", coach.id);
-  }
-
-  const { data: customer } = await customerQuery.maybeSingle();
-  if (!customer) notFound();
-
+  const { supabase, customer } = await getCustomerForCoach(params.id);
   const { dayKeys, todayKey, queryFrom } = buildWindow();
 
-  const [profileRes, logsRes, msgsRes, notesRes, foodsRes, mealPlansRes] =
-    await Promise.all([
-      supabase
-        .from("customer_profiles")
-        .select("*")
-        .eq("customer_id", params.id)
-        .maybeSingle(),
-      supabase
-        .from("food_logs")
-        .select(
-          "id, logged_at, meal_type, raw_description, total_kcal, protein_g, carbs_g, fat_g"
-        )
-        .eq("customer_id", params.id)
-        .gte("logged_at", queryFrom.toISOString())
-        .order("logged_at", { ascending: false }),
-      supabase
-        .from("messages")
-        .select("id, direction, content, agent_name, created_at")
-        .eq("customer_id", params.id)
-        .order("created_at", { ascending: false })
-        .limit(8),
-      supabase
-        .from("coach_notes")
-        .select("id, content, is_active, created_at, expires_at")
-        .eq("customer_id", params.id)
-        .order("created_at", { ascending: false })
-        .limit(20),
-      supabase
-        .from("customer_foods")
-        .select(
-          "id, name, category, notes, is_preferred, sort_order, created_at"
-        )
-        .eq("customer_id", params.id)
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("meal_plans")
-        .select(
-          "id, plan_date, meals, total_kcal, total_protein_g, total_carbs_g, total_fat_g, ai_summary, status, created_at, updated_at"
-        )
-        .eq("customer_id", params.id)
-        .gte("plan_date", todayKey)
-        .in("status", ["draft", "published"])
-        .order("plan_date", { ascending: true }),
-    ]);
+  const [
+    profileRes,
+    logsRes,
+    msgsRes,
+    activeNoteRes,
+    activeTrainingPlanRes,
+    activeMealPlanRes,
+  ] = await Promise.all([
+    supabase
+      .from('customer_profiles')
+      .select('*')
+      .eq('customer_id', params.id)
+      .maybeSingle(),
+    supabase
+      .from('food_logs')
+      .select(
+        'id, logged_at, meal_type, raw_description, total_kcal, protein_g, carbs_g, fat_g'
+      )
+      .eq('customer_id', params.id)
+      .gte('logged_at', queryFrom.toISOString())
+      .order('logged_at', { ascending: false }),
+    supabase
+      .from('messages')
+      .select('id, direction, content, agent_name, created_at')
+      .eq('customer_id', params.id)
+      .order('created_at', { ascending: false })
+      .limit(8),
+    supabase
+      .from('coach_notes')
+      .select('id, content, created_at')
+      .eq('customer_id', params.id)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('training_plans')
+      .select('id, name, weeks, current_week, status, start_date')
+      .eq('customer_id', params.id)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('meal_plans')
+      .select('id, plan_date, status, total_kcal')
+      .eq('customer_id', params.id)
+      .gte('plan_date', todayKey)
+      .eq('status', 'published')
+      .order('plan_date', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
   const profile = profileRes.data;
   const logs30 = logsRes.data ?? [];
   const messages = msgsRes.data ?? [];
-  const allNotes = notesRes.data ?? [];
-  const activeNote = allNotes.find((n) => n.is_active) ?? null;
-  const notesHistory = allNotes.filter((n) => !n.is_active).slice(0, 5);
-  const foods = foodsRes.data ?? [];
-  const allMealPlans = (mealPlansRes.data ?? []) as MealPlan[];
-
-  // Draft plans take precedence; if no drafts, show published.
-  const drafts = allMealPlans.filter((p) => p.status === "draft");
-  const published = allMealPlans.filter((p) => p.status === "published");
-  const visiblePlans: MealPlan[] = drafts.length > 0 ? drafts : published;
-  const hasDraft = drafts.length > 0;
-
-  const nutritionSettings = {
-    meal_plan_frequency:
-      (profile?.meal_plan_frequency as "daily" | "weekly") || "weekly",
-    ai_tips_enabled: !!profile?.ai_tips_enabled,
-    meal_plan_via_telegram: profile?.meal_plan_via_telegram ?? true,
-  };
+  const activeNote = activeNoteRes.data;
+  const activeTrainingPlan = activeTrainingPlanRes.data;
+  const activeMealPlan = activeMealPlanRes.data;
 
   const recentLogs = logs30.slice(0, 8);
 
@@ -211,7 +105,6 @@ export default async function CustomerDetailPage({
   for (const key of dayKeys) {
     dailyMap.set(key, { kcal: 0, logCount: 0, protein: 0, carbs: 0, fat: 0 });
   }
-
   for (const log of logs30) {
     if (!log.logged_at) continue;
     const key = viennaDay(new Date(log.logged_at));
@@ -228,9 +121,7 @@ export default async function CustomerDetailPage({
     const v = dailyMap.get(date)!;
     return { date, kcal: v.kcal, logCount: v.logCount };
   });
-
   const days7 = days30.slice(-7);
-
   const macro7 = dayKeys.slice(-7).reduce(
     (acc, key) => {
       const v = dailyMap.get(key)!;
@@ -259,7 +150,7 @@ export default async function CustomerDetailPage({
       : null;
 
   const displayName =
-    customer.first_name || customer.telegram_username || "Kunde";
+    customer.first_name || customer.telegram_username || 'Kunde';
 
   const planTargets = {
     kcal: profile?.daily_kcal_target ?? null,
@@ -269,10 +160,10 @@ export default async function CustomerDetailPage({
   };
 
   return (
-    <div>
+    <div className="max-w-6xl mx-auto px-6 py-10">
       <Link
-        href="/coach/customers"
-        className="inline-flex items-center gap-2 text-xs tracking-capsTight uppercase text-bone-muted hover:text-bone mb-8 transition"
+        href="/coach"
+        className="text-[11px] uppercase tracking-caps text-bone-faint hover:text-bone-muted transition-colors mb-6 inline-flex items-center gap-2"
       >
         <span>←</span>
         <span>Zurück zur Kundenliste</span>
@@ -280,23 +171,14 @@ export default async function CustomerDetailPage({
 
       <div className="flex items-start justify-between gap-6 mb-10 flex-wrap">
         <div>
-          <p className="text-[9px] tracking-caps uppercase text-gold font-medium mb-3">
-            Kunde
-          </p>
-          <h1 className="font-serif text-5xl text-bone leading-tight mb-3">
+          <h1 className="font-serif text-4xl text-bone leading-tight mb-2">
             {displayName}
           </h1>
-          <div className="flex items-center gap-3 text-xs text-bone-muted flex-wrap">
-            {customer.telegram_username && (
-              <span>@{customer.telegram_username}</span>
-            )}
-            <span className="w-1 h-1 rounded-full bg-white/15" />
-            <span>seit {formatDate(customer.created_at)}</span>
-            <span className="w-1 h-1 rounded-full bg-white/15" />
-            <span className="tabular-nums">
-              Telegram {customer.telegram_chat_id}
-            </span>
-          </div>
+          {customer.telegram_username && (
+            <p className="text-sm text-bone-muted">
+              @{customer.telegram_username}
+            </p>
+          )}
         </div>
         <StatusBadge status={customer.status} />
       </div>
@@ -304,28 +186,27 @@ export default async function CustomerDetailPage({
       <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8 md:gap-12 items-center py-10 border-y border-white/[0.06] mb-0">
         <ProgressRing
           value={today.kcal}
-          goal={profile?.daily_kcal_target ?? null}
-          label="HEUTE"
-          unit="kcal"
+          target={planTargets.kcal ?? 2000}
+          label="kcal heute"
         />
         <div className="flex flex-col gap-5 w-full">
           <MacroBar
+            label="Kalorien"
+            value={today.kcal}
+            target={planTargets.kcal ?? 2000}
+            unit="kcal"
+          />
+          <MacroBar
             label="Protein"
             value={today.protein}
-            goal={profile?.protein_target_g ?? null}
-            variant="gold"
+            target={planTargets.protein ?? 150}
+            unit="g"
           />
           <MacroBar
-            label="Kohlenhydrate"
+            label="Carbs"
             value={today.carbs}
-            goal={profile?.carbs_target_g ?? null}
-            variant="soft"
-          />
-          <MacroBar
-            label="Fett"
-            value={today.fat}
-            goal={profile?.fat_target_g ?? null}
-            variant="deep"
+            target={planTargets.carbs ?? 200}
+            unit="g"
           />
         </div>
       </div>
@@ -336,121 +217,138 @@ export default async function CustomerDetailPage({
         <StatCell
           value={
             weightDelta != null
-              ? (weightDelta > 0 ? "+" : "") + weightDelta.toFixed(1)
-              : "—"
+              ? `${weightDelta > 0 ? '+' : ''}${weightDelta} kg`
+              : '—'
           }
-          label="Ziel-Delta"
-          unit={weightDelta != null ? "kg" : undefined}
+          label="Gewichtsziel"
         />
       </StatStrip>
 
+      {/* AKTIVE PLÄNE — Quick-Übersicht mit Links */}
+      <Section title="Aktive Pläne" topMargin>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-white/[0.06]">
+          <Panel title="Ernährung">
+            {activeMealPlan ? (
+              <p className="text-sm text-bone">
+                Heutiger Plan veröffentlicht ·{' '}
+                <span className="text-bone-muted tabular-nums">
+                  {activeMealPlan.total_kcal ?? '—'} kcal
+                </span>
+              </p>
+            ) : (
+              <Empty>Kein veröffentlichter Plan für heute</Empty>
+            )}
+            <Link
+              href={`/coach/customers/${params.id}/nutrition`}
+              className="inline-block mt-4 text-[10px] uppercase tracking-caps text-gold/80 hover:text-gold transition font-medium"
+            >
+              → Ernährung bearbeiten
+            </Link>
+          </Panel>
+
+          <Panel title="Training">
+            {activeTrainingPlan ? (
+              <p className="text-sm text-bone">
+                {activeTrainingPlan.name} ·{' '}
+                <span className="text-bone-muted tabular-nums">
+                  Woche {activeTrainingPlan.current_week ?? 1} von{' '}
+                  {activeTrainingPlan.weeks ?? 4}
+                </span>
+              </p>
+            ) : (
+              <Empty>Kein aktiver Plan</Empty>
+            )}
+            <Link
+              href={`/coach/customers/${params.id}/training`}
+              className="inline-block mt-4 text-[10px] uppercase tracking-caps text-gold/80 hover:text-gold transition font-medium"
+            >
+              → Training bearbeiten
+            </Link>
+          </Panel>
+        </div>
+      </Section>
+
+      {/* COACH-NOTIZ Quick-View (nur read, edit auf Profil-Page) */}
+      {activeNote && (
+        <Section title="Coach-Notiz" topMargin>
+          <div className="bg-ink-900 p-7">
+            <p className="text-sm text-bone italic leading-relaxed">
+              &ldquo;{activeNote.content}&rdquo;
+            </p>
+            <Link
+              href={`/coach/customers/${params.id}/profile`}
+              className="inline-block mt-4 text-[10px] uppercase tracking-caps text-gold/80 hover:text-gold transition font-medium"
+            >
+              → Notiz bearbeiten
+            </Link>
+          </div>
+        </Section>
+      )}
+
       <Section title="Verlauf · 30 Tage" topMargin>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <KcalLast7Chart
-            data={days7}
-            target={profile?.daily_kcal_target ?? null}
-          />
-          <MacroBreakdown
-            protein={macro7.protein}
-            carbs={macro7.carbs}
-            fat={macro7.fat}
-          />
+          <KcalLast7Chart data={days7} target={planTargets.kcal} />
+          <MacroBreakdown macros={macro7} />
           <StreakHeatmap data={days30} />
           <WeightProgress
             start={profile?.weight_start_kg ?? null}
             target={profile?.weight_target_kg ?? null}
+            current={profile?.weight_current_kg ?? null}
           />
         </div>
       </Section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-px bg-white/[0.06] mt-12">
         <Panel title="Profil">
-          {profile ? (
-            <dl className="divide-y divide-white/[0.06]">
-              <ProfileRow label="Alter">{profile.age ?? "—"}</ProfileRow>
-              <ProfileRow label="Geschlecht">
-                {profile.gender ?? "—"}
-              </ProfileRow>
-              <ProfileRow label="Größe">
-                {profile.height_cm ? `${profile.height_cm} cm` : "—"}
-              </ProfileRow>
-              <ProfileRow label="Gewicht">
-                {profile.weight_start_kg
-                  ? `${profile.weight_start_kg} kg`
-                  : "—"}
-                {profile.weight_target_kg ? (
-                  <>
-                    <span className="mx-2 text-bone-muted">→</span>
-                    <span className="text-gold-soft">
-                      {profile.weight_target_kg} kg
-                    </span>
-                  </>
-                ) : null}
-              </ProfileRow>
-              <ProfileRow label="Ziel">{labelGoal(profile.goal)}</ProfileRow>
-              <ProfileRow label="Erfahrung">
-                {profile.experience_level ?? "—"}
-              </ProfileRow>
-              <ProfileRow label="Equipment">
-                {profile.equipment ?? "—"}
-              </ProfileRow>
-              <ProfileRow label="Allergien">
-                {profile.allergies && profile.allergies.length > 0
-                  ? profile.allergies.join(", ")
-                  : "Keine"}
-              </ProfileRow>
-              <ProfileRow label="Vorlieben">
-                {profile.food_preferences && profile.food_preferences.length > 0
-                  ? profile.food_preferences.join(", ")
-                  : "—"}
-              </ProfileRow>
-              {profile.notes && (
-                <ProfileRow label="Notizen">
-                  <span className="italic text-bone-muted">
-                    {profile.notes}
-                  </span>
-                </ProfileRow>
-              )}
-            </dl>
-          ) : (
-            <Empty>Noch kein Profil — Intake nicht abgeschlossen.</Empty>
-          )}
-        </Panel>
-
-        <Panel title="Tagesziele">
-          <GoalsEditor
-            customerId={params.id}
-            profile={
-              profile
-                ? {
-                    daily_kcal_target: profile.daily_kcal_target ?? null,
-                    protein_target_g: profile.protein_target_g ?? null,
-                    carbs_target_g: profile.carbs_target_g ?? null,
-                    fat_target_g: profile.fat_target_g ?? null,
-                  }
-                : null
-            }
-          />
+          <dl className="divide-y divide-white/[0.06]">
+            <ProfileRow label="Status">
+              {STATUS_LABELS[customer.status] ?? customer.status}
+            </ProfileRow>
+            <ProfileRow label="Onboarded">
+              {formatDate(customer.onboarded_at)}
+            </ProfileRow>
+            <ProfileRow label="Ziel">{labelGoal(profile?.goal ?? null)}</ProfileRow>
+            <ProfileRow label="Erfahrung">
+              {profile?.experience_level ?? '—'}
+            </ProfileRow>
+            <ProfileRow label="Equipment">
+              {profile?.equipment ?? '—'}
+            </ProfileRow>
+            <ProfileRow label="Allergien">
+              {profile?.allergies ?? '—'}
+            </ProfileRow>
+            <ProfileRow label="Größe">
+              {profile?.height_cm ? `${profile.height_cm} cm` : '—'}
+            </ProfileRow>
+            <ProfileRow label="Gewicht">
+              {profile?.weight_start_kg
+                ? `${profile.weight_start_kg} kg → ${profile?.weight_target_kg ?? '—'} kg`
+                : '—'}
+            </ProfileRow>
+          </dl>
+          <Link
+            href={`/coach/customers/${params.id}/profile`}
+            className="inline-block mt-5 text-[10px] uppercase tracking-caps text-gold/80 hover:text-gold transition font-medium"
+          >
+            → Profil bearbeiten
+          </Link>
         </Panel>
 
         <Panel title={`Letzte Mahlzeiten · ${recentLogs.length}`}>
           {recentLogs.length === 0 ? (
             <Empty>Noch keine Logs.</Empty>
           ) : (
-            <div>
-              {recentLogs.map((l) => (
+            <ul className="divide-y divide-white/[0.06]">
+              {recentLogs.map((log) => (
                 <MealRow
-                  key={l.id}
-                  type={l.meal_type}
-                  description={l.raw_description}
-                  protein={l.protein_g != null ? Number(l.protein_g) : null}
-                  carbs={l.carbs_g != null ? Number(l.carbs_g) : null}
-                  fat={l.fat_g != null ? Number(l.fat_g) : null}
-                  kcal={l.total_kcal}
-                  loggedAt={l.logged_at}
+                  key={log.id}
+                  meal_type={log.meal_type}
+                  description={log.raw_description}
+                  kcal={log.total_kcal}
+                  logged_at={log.logged_at}
                 />
               ))}
-            </div>
+            </ul>
           )}
         </Panel>
 
@@ -458,50 +356,38 @@ export default async function CustomerDetailPage({
           {messages.length === 0 ? (
             <Empty>Noch keine Nachrichten.</Empty>
           ) : (
-            <div>
+            <ul className="divide-y divide-white/[0.06]">
               {messages.map((m) => (
                 <MessageRow
                   key={m.id}
                   direction={m.direction}
                   content={m.content}
-                  agentName={m.agent_name}
-                  createdAt={m.created_at}
+                  agent_name={m.agent_name}
+                  created_at={m.created_at}
                 />
               ))}
-            </div>
+            </ul>
           )}
         </Panel>
       </div>
 
-      <div className="mt-12">
-        <NutritionSetup
-          customerId={params.id}
-          foods={foods}
-          settings={nutritionSettings}
-          hasDraft={hasDraft}
+      {/* GROßE NAV-BUTTONS unten */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-white/[0.06] mt-12">
+        <NavCard
+          href={`/coach/customers/${params.id}/profile`}
+          title="Profil"
+          subtitle="Ziele, Equipment, Notizen"
         />
-      </div>
-
-      {visiblePlans.length > 0 && (
-        <div className="mt-12">
-          <WeeklyMealPlanEditor
-            customerId={params.id}
-            plans={visiblePlans}
-            targets={planTargets}
-          />
-        </div>
-      )}
-
-      <div className="mt-12">
-        <CoachNotesEditor
-          customerId={params.id}
-          activeNote={activeNote}
-          notesHistory={notesHistory}
+        <NavCard
+          href={`/coach/customers/${params.id}/nutrition`}
+          title="Ernährung"
+          subtitle="Food-Library + Wochenplan"
         />
-      </div>
-
-      <div className="mt-12">
-        <TrainingPlanSection customerId={params.id} />
+        <NavCard
+          href={`/coach/customers/${params.id}/training`}
+          title="Training"
+          subtitle="KI-Generator + Editor"
+        />
       </div>
     </div>
   );
@@ -519,7 +405,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className={topMargin ? "mt-12" : ""}>
+    <section className={topMargin ? 'mt-12' : ''}>
       <h2 className="text-[9px] tracking-caps uppercase text-bone-muted font-medium mb-6">
         {title}
       </h2>
@@ -568,10 +454,10 @@ function Empty({ children }: { children: React.ReactNode }) {
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    active: "border-gold/40 text-gold",
-    intake: "border-bone/30 text-bone",
-    paused: "border-bone-muted/30 text-bone-muted",
-    archived: "border-bone-faint text-bone-faint",
+    active: 'border-gold/40 text-gold',
+    intake: 'border-bone/30 text-bone',
+    paused: 'border-bone-muted/30 text-bone-muted',
+    archived: 'border-bone-faint text-bone-faint',
   };
   const style = styles[status] ?? styles.paused;
   const label = STATUS_LABELS[status] ?? status;
@@ -581,5 +467,27 @@ function StatusBadge({ status }: { status: string }) {
     >
       {label}
     </span>
+  );
+}
+
+function NavCard({
+  href,
+  title,
+  subtitle,
+}: {
+  href: string;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="bg-ink-900 p-7 hover:bg-ink-800 transition-colors group"
+    >
+      <p className="font-serif text-2xl text-bone leading-tight mb-2 group-hover:text-gold transition-colors">
+        {title} →
+      </p>
+      <p className="text-sm text-bone-muted">{subtitle}</p>
+    </Link>
   );
 }
