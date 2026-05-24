@@ -152,13 +152,6 @@ export default async function CustomerDetailPage({
   const displayName =
     customer.first_name || customer.telegram_username || 'Kunde';
 
-  const planTargets = {
-    kcal: profile?.daily_kcal_target ?? null,
-    protein: profile?.protein_target_g ?? null,
-    carbs: profile?.carbs_target_g ?? null,
-    fat: profile?.fat_target_g ?? null,
-  };
-
   return (
     <div className="max-w-6xl mx-auto px-6 py-10">
       <Link
@@ -183,30 +176,32 @@ export default async function CustomerDetailPage({
         <StatusBadge status={customer.status} />
       </div>
 
+      {/* HEUTE: ProgressRing + 3 MacroBars */}
       <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8 md:gap-12 items-center py-10 border-y border-white/[0.06] mb-0">
         <ProgressRing
           value={today.kcal}
-          target={planTargets.kcal ?? 2000}
-          label="kcal heute"
+          goal={profile?.daily_kcal_target ?? null}
+          label="HEUTE"
+          unit="kcal"
         />
         <div className="flex flex-col gap-5 w-full">
           <MacroBar
-            label="Kalorien"
-            value={today.kcal}
-            target={planTargets.kcal ?? 2000}
-            unit="kcal"
-          />
-          <MacroBar
             label="Protein"
             value={today.protein}
-            target={planTargets.protein ?? 150}
-            unit="g"
+            goal={profile?.protein_target_g ?? null}
+            variant="gold"
           />
           <MacroBar
-            label="Carbs"
+            label="Kohlenhydrate"
             value={today.carbs}
-            target={planTargets.carbs ?? 200}
-            unit="g"
+            goal={profile?.carbs_target_g ?? null}
+            variant="soft"
+          />
+          <MacroBar
+            label="Fett"
+            value={today.fat}
+            goal={profile?.fat_target_g ?? null}
+            variant="deep"
           />
         </div>
       </div>
@@ -285,6 +280,7 @@ export default async function CustomerDetailPage({
         </Section>
       )}
 
+      {/* CHARTS: Verlauf 30 Tage */}
       <Section title="Verlauf · 30 Tage" topMargin>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <KcalLast7Chart
@@ -304,6 +300,7 @@ export default async function CustomerDetailPage({
         </div>
       </Section>
 
+      {/* PROFIL + LETZTE AKTIVITÄT */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-px bg-white/[0.06] mt-12">
         <Panel title="Profil">
           {profile ? (
