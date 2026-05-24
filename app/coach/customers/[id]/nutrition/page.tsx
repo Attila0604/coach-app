@@ -47,10 +47,10 @@ export default async function CustomerNutritionPage({
   const foods = foodsRes.data ?? [];
   const allMealPlans = (mealPlansRes.data ?? []) as MealPlan[];
 
-  // Drafts haben Vorrang; sonst Published anzeigen
   const drafts = allMealPlans.filter((p) => p.status === 'draft');
   const published = allMealPlans.filter((p) => p.status === 'published');
   const visiblePlans: MealPlan[] = drafts.length > 0 ? drafts : published;
+  const hasDraft = drafts.length > 0;
 
   const nutritionSettings = {
     meal_plan_frequency:
@@ -86,13 +86,16 @@ export default async function CustomerNutritionPage({
           customerId={params.id}
           foods={foods}
           settings={nutritionSettings}
+          hasDraft={hasDraft}
         />
 
-        <WeeklyMealPlanEditor
-          customerId={params.id}
-          plans={visiblePlans}
-          targets={planTargets}
-        />
+        {visiblePlans.length > 0 && (
+          <WeeklyMealPlanEditor
+            customerId={params.id}
+            plans={visiblePlans}
+            targets={planTargets}
+          />
+        )}
       </div>
     </div>
   );
