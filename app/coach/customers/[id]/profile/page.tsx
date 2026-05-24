@@ -13,7 +13,9 @@ export default async function CustomerProfilePage({
   const [profileRes, notesRes] = await Promise.all([
     supabase
       .from('customer_profiles')
-      .select('*')
+      .select(
+        'daily_kcal_target, protein_target_g, carbs_target_g, fat_target_g'
+      )
       .eq('customer_id', params.id)
       .maybeSingle(),
     supabase
@@ -47,11 +49,20 @@ export default async function CustomerProfilePage({
       <div className="space-y-8">
         <div className="bg-ink-900 p-7">
           <h3 className="text-[9px] tracking-caps uppercase text-bone-muted font-medium mb-5">
-            Ziele & Trainings-Profil
+            Tagesziele
           </h3>
           <GoalsEditor
             customerId={params.id}
-            profile={profile}
+            profile={
+              profile
+                ? {
+                    daily_kcal_target: profile.daily_kcal_target ?? null,
+                    protein_target_g: profile.protein_target_g ?? null,
+                    carbs_target_g: profile.carbs_target_g ?? null,
+                    fat_target_g: profile.fat_target_g ?? null,
+                  }
+                : null
+            }
           />
         </div>
 
