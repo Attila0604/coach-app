@@ -890,19 +890,36 @@ function TextInput({
 }: {
   initial: string;
   placeholder?: string;
-  onSave: (value: string) => void;
+  onSave: (value: string) => void | Promise<void>;
 }) {
   const [value, setValue] = useState(initial);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  async function handleBlur() {
+    if (value !== initial) {
+      setSaveState('saving');
+      await onSave(value);
+      setSaveState('saved');
+      setTimeout(() => setSaveState('idle'), 1500);
+    }
+  }
+
   return (
-    <input
-      value={value}
-      placeholder={placeholder}
-      onChange={e => setValue(e.target.value)}
-      onBlur={() => {
-        if (value !== initial) onSave(value);
-      }}
-      className="w-full bg-[#131215] border border-[#1F1E1A] rounded-lg px-3 py-2.5 text-[14px] text-[#F5F2EA] focus:border-[#D4AF6C] focus:outline-none transition-colors"
-    />
+    <div className="relative">
+      <input
+        value={value}
+        placeholder={placeholder}
+        onChange={e => setValue(e.target.value)}
+        onBlur={handleBlur}
+        className="w-full bg-[#131215] border border-[#1F1E1A] rounded-lg px-3 py-2.5 pr-10 text-[14px] text-[#F5F2EA] focus:border-[#D4AF6C] focus:outline-none transition-colors"
+      />
+      {saveState === 'saving' && (
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[#8E8B83]">…</span>
+      )}
+      {saveState === 'saved' && (
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#D4AF6C]">✓</span>
+      )}
+    </div>
   );
 }
 
@@ -917,9 +934,20 @@ function NumberInput({
   min: number;
   max: number;
   suffix?: string;
-  onSave: (value: number) => void;
+  onSave: (value: number) => void | Promise<void>;
 }) {
   const [value, setValue] = useState(initial);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  async function handleBlur() {
+    if (value !== initial && value >= min && value <= max) {
+      setSaveState('saving');
+      await onSave(value);
+      setSaveState('saved');
+      setTimeout(() => setSaveState('idle'), 1500);
+    }
+  }
+
   return (
     <div className="flex items-center bg-[#131215] border border-[#1F1E1A] rounded-lg px-3 py-2.5 focus-within:border-[#D4AF6C] transition-colors">
       <input
@@ -928,13 +956,17 @@ function NumberInput({
         min={min}
         max={max}
         onChange={e => setValue(Number(e.target.value))}
-        onBlur={() => {
-          if (value !== initial && value >= min && value <= max) onSave(value);
-        }}
+        onBlur={handleBlur}
         className="bg-transparent text-[14px] text-[#F5F2EA] tabular-nums focus:outline-none w-12"
       />
       {suffix && (
         <span className="text-[14px] text-[#8E8B83] tabular-nums ml-1">{suffix}</span>
+      )}
+      {saveState === 'saving' && (
+        <span className="text-[10px] text-[#8E8B83] ml-2">…</span>
+      )}
+      {saveState === 'saved' && (
+        <span className="text-[12px] text-[#D4AF6C] ml-2">✓</span>
       )}
     </div>
   );
@@ -945,19 +977,36 @@ function DateInput({
   onSave,
 }: {
   initial: string | null;
-  onSave: (value: string | null) => void;
+  onSave: (value: string | null) => void | Promise<void>;
 }) {
   const [value, setValue] = useState(initial ?? '');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  async function handleBlur() {
+    if (value !== (initial ?? '')) {
+      setSaveState('saving');
+      await onSave(value || null);
+      setSaveState('saved');
+      setTimeout(() => setSaveState('idle'), 1500);
+    }
+  }
+
   return (
-    <input
-      type="date"
-      value={value}
-      onChange={e => setValue(e.target.value)}
-      onBlur={() => {
-        if (value !== (initial ?? '')) onSave(value || null);
-      }}
-      className="w-full bg-[#131215] border border-[#1F1E1A] rounded-lg px-3 py-2.5 text-[14px] text-[#F5F2EA] focus:border-[#D4AF6C] focus:outline-none transition-colors tabular-nums"
-    />
+    <div className="relative">
+      <input
+        type="date"
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        onBlur={handleBlur}
+        className="w-full bg-[#131215] border border-[#1F1E1A] rounded-lg px-3 py-2.5 pr-10 text-[14px] text-[#F5F2EA] focus:border-[#D4AF6C] focus:outline-none transition-colors tabular-nums"
+      />
+      {saveState === 'saving' && (
+        <span className="absolute right-10 top-1/2 -translate-y-1/2 text-[10px] text-[#8E8B83]">…</span>
+      )}
+      {saveState === 'saved' && (
+        <span className="absolute right-10 top-1/2 -translate-y-1/2 text-[12px] text-[#D4AF6C]">✓</span>
+      )}
+    </div>
   );
 }
 
@@ -966,20 +1015,37 @@ function TimeInput({
   onSave,
 }: {
   initial: string | null;
-  onSave: (value: string | null) => void;
+  onSave: (value: string | null) => void | Promise<void>;
 }) {
   const initialUI = initial ? initial.slice(0, 5) : '';
   const [value, setValue] = useState(initialUI);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  async function handleBlur() {
+    if (value !== initialUI) {
+      setSaveState('saving');
+      await onSave(value || null);
+      setSaveState('saved');
+      setTimeout(() => setSaveState('idle'), 1500);
+    }
+  }
+
   return (
-    <input
-      type="time"
-      value={value}
-      onChange={e => setValue(e.target.value)}
-      onBlur={() => {
-        if (value !== initialUI) onSave(value || null);
-      }}
-      className="w-full bg-[#131215] border border-[#1F1E1A] rounded-lg px-3 py-2.5 text-[14px] text-[#F5F2EA] focus:border-[#D4AF6C] focus:outline-none transition-colors tabular-nums"
-    />
+    <div className="relative">
+      <input
+        type="time"
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        onBlur={handleBlur}
+        className="w-full bg-[#131215] border border-[#1F1E1A] rounded-lg px-3 py-2.5 pr-10 text-[14px] text-[#F5F2EA] focus:border-[#D4AF6C] focus:outline-none transition-colors tabular-nums"
+      />
+      {saveState === 'saving' && (
+        <span className="absolute right-10 top-1/2 -translate-y-1/2 text-[10px] text-[#8E8B83]">…</span>
+      )}
+      {saveState === 'saved' && (
+        <span className="absolute right-10 top-1/2 -translate-y-1/2 text-[12px] text-[#D4AF6C]">✓</span>
+      )}
+    </div>
   );
 }
 
