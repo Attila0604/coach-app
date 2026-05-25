@@ -1,22 +1,8 @@
-// ============================================================================
-// Training Plan Section — Server Component V3
-// 
-// Lädt den aktuellen Plan (max 1 pro Customer, status in draft/active/paused).
-// Zeigt:
-//   - KI-Generator (wenn kein Plan)
-//   - Status-Bar mit Activate/Discard Buttons (wenn Plan existiert)
-//   - Den bestehenden TrainingPlanEditor (unverändert)
-// 
-// EINBINDUNG in deine bestehende Kunden-Detail-Seite:
-//   import TrainingPlanSection from '@/components/training-plan-section';
-//   ...
-//   <TrainingPlanSection customerId={customer.id} />
-// ============================================================================
-
 import { createClient } from '@/lib/supabase-server';
 import TrainingPlanEditor from './training-plan-editor';
 import TrainingPlanGenerator from './ui/TrainingPlanGenerator';
-import TrainingPlanStatusBar from './ui/TrainingPlanStatusBar';
+import TrainingPlanGeneratorToggle from './ui/TrainingPlanGeneratorToggle';
+import TrainingPlanHeader from './ui/TrainingPlanHeader';
 import type { TrainingPlan } from '@/lib/types/training';
 
 export default async function TrainingPlanSection({
@@ -26,7 +12,6 @@ export default async function TrainingPlanSection({
 }) {
   const supabase = createClient();
 
-  // Lade nur aktive/draft/paused Pläne — completed sind archiviert und werden nicht angezeigt
   const { data, error } = await supabase
     .from('training_plans')
     .select(
@@ -62,26 +47,39 @@ export default async function TrainingPlanSection({
       }
     : null;
 
+  // Kein Plan? → Generator groß sichtbar (Onboarding-Mode)
+  if (!plan) {
+    return (
+      <div>
+        <TrainingPlanGenerator
+          customerId={customerId}
+          hasExistingPlan={false}
+        />
+      </div>
+    );
+  }
+
+  // Plan existiert? → Header + Generator-Toggle + Editor
   return (
-    <div className="space-y-8">
-      {/* KI-Generator immer sichtbar */}
-      <TrainingPlanGenerator
+    <div className="space-y-6">
+      <TrainingPlanHeader
+        planId={plan.id}
         customerId={customerId}
-        hasExistingPlan={!!plan}
+        status={plan.status}
+        planName={plan.name}
+        weeks={plan.weeks}
+        currentWeek={plan.current_week}
+        daysCount={plan.days?.length ?? 0}
       />
 
-      {/* Wenn Plan existiert: Status-Bar + Editor */}
-      {plan && (
-        <>
-          <TrainingPlanStatusBar
-            planId={plan.id}
-            customerId={customerId}
-            status={plan.status}
-            planName={plan.name}
-          />
-          <TrainingPlanEditor customerId={customerId} plan={plan} />
-        </>
-      )}
+      <TrainingPlanGeneratorToggle label="✨ Plan neu generieren">
+        <TrainingPlanGenerator
+          customerId={customerId}
+          hasExistingPlan={true}
+        />
+      </TrainingPlanGeneratorToggle>
+
+      <TrainingPlanEditor customerId={customerId} plan={plan} />
     </div>
   );
 }
