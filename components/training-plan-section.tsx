@@ -59,7 +59,7 @@ export default async function TrainingPlanSection({
     );
   }
 
-  // Plan existiert? → Header + Generator-Toggle + Editor
+  // Plan existiert? → Header + Generator-Toggle + Auto-Save-Hinweis + Editor
   return (
     <div className="space-y-6">
       <TrainingPlanHeader
@@ -78,6 +78,18 @@ export default async function TrainingPlanSection({
           hasExistingPlan={true}
         />
       </TrainingPlanGeneratorToggle>
+
+      {/* AUTO-SAVE HINWEIS — anders als Profil/Ernährung mit Speichern-Button */}
+      <div className="border-l-2 border-gold/40 bg-gold/[0.04] px-5 py-3.5">
+        <p className="text-[12px] text-bone leading-relaxed">
+          <span className="font-medium text-gold">ℹ️ Auto-Save aktiv</span>
+          <span className="text-bone-muted">
+            {' '}— Anders als bei Profil und Ernährung werden Änderungen hier
+            automatisch gespeichert, sobald du das Feld verlässt.
+            Das <span className="text-gold font-medium">✓</span> Symbol bestätigt das Speichern.
+          </span>
+        </p>
+      </div>
 
       <TrainingPlanEditor customerId={customerId} plan={plan} />
     </div>
