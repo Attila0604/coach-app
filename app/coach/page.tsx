@@ -294,6 +294,7 @@ export default async function CoachDashboardPage() {
   const activeTodayCount = activeToday.length;
   const workoutsWeekCount = week7Workouts.length;
   const inactiveCount = inactive.length;
+  const mealPlanTodayCount = summaries.filter((s) => s.hasPublishedPlanToday).length;
 
   return (
     <div>
@@ -310,9 +311,10 @@ export default async function CoachDashboardPage() {
       </p>
 
       {/* === STAT-CARDS === */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-12">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-12">
         <StatCard label="Aktive Kunden" value={activeCount} />
         <StatCard label="Heute aktiv" value={activeTodayCount} accent={activeTodayCount > 0 ? 'gold' : undefined} />
+        <StatCard label="Meal-Plan heute" value={mealPlanTodayCount} accent={mealPlanTodayCount > 0 ? 'gold' : undefined} />
         <StatCard label="Workouts · 7 Tage" value={workoutsWeekCount} />
         <StatCard label="Inaktiv" value={inactiveCount} accent={inactiveCount > 0 ? 'red' : undefined} />
       </div>
