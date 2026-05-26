@@ -21,11 +21,36 @@ type Message = {
   created_at: string;
 };
 
-type Filter = 'all' | 'meals' | 'messages';
+type WorkoutLog = {
+  id: string;
+  exercise_id: string;
+  set_number: number;
+  reps_done: number | null;
+  weight_used_kg: number | null;
+};
+
+type Workout = {
+  id: string;
+  started_at: string;
+  ended_at: string | null;
+  status: string;
+  total_duration_seconds: number | null;
+  notes: string | null;
+  training_days: {
+    id: string;
+    day_number: number;
+    title: string;
+    subtitle: string | null;
+  } | null;
+  workout_logs: WorkoutLog[];
+};
+
+type Filter = 'all' | 'meals' | 'messages' | 'workouts';
 
 type ActivityItem =
   | { kind: 'meal'; id: string; timestamp: string; data: FoodLog }
-  | { kind: 'message'; id: string; timestamp: string; data: Message };
+  | { kind: 'message'; id: string; timestamp: string; data: Message }
+  | { kind: 'workout'; id: string; timestamp: string; data: Workout };
 
 const MEAL_TYPE_LABELS: Record<string, string> = {
   fruehstueck: 'Frühstück',
@@ -38,6 +63,13 @@ const MEAL_TYPE_LABELS: Record<string, string> = {
   dinner: 'Abend',
   snack: 'Snack',
   snk: 'Snack',
+};
+
+const WORKOUT_STATUS_LABELS: Record<string, string> = {
+  completed: 'Abgeschlossen',
+  aborted: 'Abgebrochen',
+  paused: 'Pausiert',
+  in_progress: 'Läuft',
 };
 
 function formatTime(iso: string): string {
@@ -76,12 +108,23 @@ function formatDayLabel(key: string): string {
   });
 }
 
+function formatDuration(seconds: number | null): string {
+  if (!seconds) return '–';
+  const min = Math.floor(seconds / 60);
+  if (min < 60) return `${min} Min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
 export default function ActivityList({
   foodLogs,
   messages,
+  workouts,
 }: {
   foodLogs: FoodLog[];
   messages: Message[];
+  workouts: Workout[];
 }) {
   const [filter, setFilter] = useState<Filter>('all');
 
@@ -99,19 +142,27 @@ export default function ActivityList({
         timestamp: m.created_at,
         data: m,
       })),
+      ...workouts.map((w) => ({
+        kind: 'workout' as const,
+        id: w.id,
+        timestamp: w.started_at,
+        data: w,
+      })),
     ];
     items.sort(
       (a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
     return items;
-  }, [foodLogs, messages]);
+  }, [foodLogs, messages, workouts]);
 
   const filteredItems = useMemo(() => {
     if (filter === 'all') return allItems;
     if (filter === 'meals') return allItems.filter((i) => i.kind === 'meal');
     if (filter === 'messages')
       return allItems.filter((i) => i.kind === 'message');
+    if (filter === 'workouts')
+      return allItems.filter((i) => i.kind === 'workout');
     return allItems;
   }, [allItems, filter]);
 
@@ -133,6 +184,12 @@ export default function ActivityList({
           onClick={() => setFilter('all')}
         >
           Alle · {allItems.length}
+        </FilterPill>
+        <FilterPill
+          active={filter === 'workouts'}
+          onClick={() => setFilter('workouts')}
+        >
+          Workouts · {workouts.length}
         </FilterPill>
         <FilterPill
           active={filter === 'meals'}
@@ -208,7 +265,7 @@ function ActivityItemRow({ item }: { item: ActivityItem }) {
       'Mahlzeit';
     return (
       <div className="flex gap-4 items-start">
-        <div className="text-[10px] tracking-caps uppercase text-gold/80 font-medium w-20 shrink-0 pt-1">
+        <div className="text-[10px] tracking-caps uppercase text-gold/80 font-medium w-24 shrink-0 pt-1">
           🍽 {mealLabel}
         </div>
         <div className="flex-1 min-w-0">
@@ -235,12 +292,65 @@ function ActivityItemRow({ item }: { item: ActivityItem }) {
     );
   }
 
+  if (item.kind === 'workout') {
+    const w = item.data;
+    const statusLabel = WORKOUT_STATUS_LABELS[w.status] ?? w.status;
+    const day = w.training_days;
+    const dayName = day
+      ? `Tag ${day.day_number} · ${day.title}`
+      : 'Workout';
+    const setsCount = w.workout_logs.length;
+    const totalVolume = w.workout_logs.reduce((sum, log) => {
+      if (log.weight_used_kg != null && log.reps_done != null) {
+        return sum + Number(log.weight_used_kg) * log.reps_done;
+      }
+      return sum;
+    }, 0);
+
+    // Status color
+    const statusColor =
+      w.status === 'completed'
+        ? 'text-gold/80'
+        : w.status === 'aborted'
+        ? 'text-red-400/70'
+        : 'text-bone-faint';
+
+    return (
+      <div className="flex gap-4 items-start">
+        <div className={`text-[10px] tracking-caps uppercase font-medium w-24 shrink-0 pt-1 ${statusColor}`}>
+          💪 {statusLabel}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-bone leading-relaxed font-medium">
+            {dayName}
+          </p>
+          {day?.subtitle && (
+            <p className="text-[11px] text-bone-muted italic mt-0.5">
+              {day.subtitle}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-x-3 text-[11px] text-bone-faint mt-1 tabular-nums">
+            <span>{formatDuration(w.total_duration_seconds)}</span>
+            <span>{setsCount} {setsCount === 1 ? 'Satz' : 'Sätze'}</span>
+            {totalVolume > 0 && (
+              <span>{Math.round(totalVolume)} kg Volumen</span>
+            )}
+          </div>
+        </div>
+        <div className="text-[11px] text-bone-faint tabular-nums shrink-0 pt-1">
+          {formatTime(w.started_at)}
+        </div>
+      </div>
+    );
+  }
+
+  // Message
   const msg = item.data;
   const isOutbound =
     msg.direction === 'outbound' || msg.direction === 'out';
   return (
     <div className="flex gap-4 items-start">
-      <div className="text-[10px] tracking-caps uppercase text-bone-faint font-medium w-20 shrink-0 pt-1">
+      <div className="text-[10px] tracking-caps uppercase text-bone-faint font-medium w-24 shrink-0 pt-1">
         💬 {isOutbound ? `${msg.agent_name ?? 'Bot'} →` : '← Kunde'}
       </div>
       <div className="flex-1 min-w-0">
