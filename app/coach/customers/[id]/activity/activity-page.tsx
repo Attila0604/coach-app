@@ -12,7 +12,7 @@ export default async function CustomerActivityPage({
   const since = new Date();
   since.setDate(since.getDate() - 30);
 
-  const [foodLogsRes, messagesRes] = await Promise.all([
+  const [foodLogsRes, messagesRes, workoutsRes] = await Promise.all([
     supabase
       .from('food_logs')
       .select(
@@ -27,10 +27,28 @@ export default async function CustomerActivityPage({
       .eq('customer_id', params.id)
       .gte('created_at', since.toISOString())
       .order('created_at', { ascending: false }),
+    supabase
+      .from('workout_sessions')
+      .select(
+        `
+        id,
+        started_at,
+        ended_at,
+        status,
+        total_duration_seconds,
+        notes,
+        training_days(id, day_number, title, subtitle),
+        workout_logs(id, exercise_id, set_number, reps_done, weight_used_kg)
+      `
+      )
+      .eq('customer_id', params.id)
+      .gte('started_at', since.toISOString())
+      .order('started_at', { ascending: false }),
   ]);
 
   const foodLogs = foodLogsRes.data ?? [];
   const messages = messagesRes.data ?? [];
+  const workouts = workoutsRes.data ?? [];
 
   const displayName =
     customer.first_name || customer.telegram_username || 'Kunde';
@@ -47,7 +65,11 @@ export default async function CustomerActivityPage({
         Aktivität · letzte 30 Tage
       </p>
 
-      <ActivityList foodLogs={foodLogs} messages={messages} />
+      <ActivityList
+        foodLogs={foodLogs}
+        messages={messages}
+        workouts={workouts as any}
+      />
     </div>
   );
 }
