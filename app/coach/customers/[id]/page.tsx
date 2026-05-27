@@ -1,530 +1,447 @@
 import Link from 'next/link';
-import {
-  KcalLast7Chart,
-  StreakHeatmap,
-  MacroBreakdown,
-  WeightProgress,
-} from './charts';
-import { ProgressRing } from '@/components/ui/ProgressRing';
-import { MacroBar } from '@/components/ui/MacroBar';
-import { StatStrip, StatCell } from '@/components/ui/StatStrip';
-import { MealRow } from '@/components/ui/MealRow';
-import { MessageRow } from '@/components/ui/MessageRow';
-import {
-  getCustomerForCoach,
-  buildWindow,
-  computeStreak,
-  viennaDay,
-  labelGoal,
-  formatDate,
-  STATUS_LABELS,
-} from '@/lib/coach-customer-helpers';
+import { getCustomerForCoach, viennaDay, TZ } from '@/lib/coach-customer-helpers';
 
-type Params = { id: string };
+const NAV_CARDS = [
+  { href: 'profile', label: 'Profil', subtitle: 'Tagesziele & Notizen' },
+  { href: 'nutrition', label: 'Ernährung', subtitle: 'Food-Library + Wochenplan' },
+  { href: 'training', label: 'Training', subtitle: 'KI-Generator + Editor' },
+  { href: 'activity', label: 'Aktivität', subtitle: 'Verlauf & Nachrichten' },
+];
 
-export default async function CustomerDetailPage({
+const MEAL_TYPE_LABELS: Record<string, string> = {
+  fruehstueck: 'Frühstück',
+  frühstück: 'Frühstück',
+  breakfast: 'Frühstück',
+  mittag: 'Mittag',
+  lunch: 'Mittag',
+  abend: 'Abend',
+  abendessen: 'Abend',
+  dinner: 'Abend',
+  snack: 'Snack',
+  snk: 'Snack',
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  active: 'Aktiv',
+  onboarding: 'Im Intake',
+  paused: 'Pausiert',
+  inactive: 'Inaktiv',
+};
+
+function formatTodayHeader(): string {
+  return new Date().toLocaleDateString('de-DE', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: TZ,
+  });
+}
+
+function formatRelative(iso: string): string {
+  const date = new Date(iso);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffH = Math.floor(diffMin / 60);
+  const diffD = Math.floor(diffH / 24);
+  if (diffMin < 1) return 'gerade eben';
+  if (diffMin < 60) return `vor ${diffMin} Min`;
+  if (diffH < 24) return `vor ${diffH} Std`;
+  if (diffD === 1) return 'gestern';
+  if (diffD < 7) return `vor ${diffD} Tagen`;
+  return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+}
+
+function formatOnboardedDate(iso: string | null): string | null {
+  if (!iso) return null;
+  return new Date(iso).toLocaleDateString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: TZ,
+  });
+}
+
+type RecentItem = {
+  id: string;
+  kind: 'meal' | 'workout' | 'message';
+  iso: string;
+  title: string;
+  subtitle?: string;
+};
+
+export default async function CustomerOverviewPage({
   params,
 }: {
-  params: Params;
+  params: { id: string };
 }) {
   const { supabase, customer } = await getCustomerForCoach(params.id);
-  const { dayKeys, todayKey, queryFrom } = buildWindow();
+
+  const todayKey = viennaDay(new Date());
+  const startOfToday = new Date(`${todayKey}T00:00:00+02:00`);
+  const since7d = new Date();
+  since7d.setDate(since7d.getDate() - 7);
 
   const [
     profileRes,
-    logsRes,
-    msgsRes,
-    activeNoteRes,
-    activeTrainingPlanRes,
-    activeMealPlanRes,
+    todayFoodRes,
+    todayWorkoutsRes,
+    todayPlanRes,
+    coachNotesRes,
+    recentFoodRes,
+    recentWorkoutsRes,
+    recentMessagesRes,
   ] = await Promise.all([
     supabase
       .from('customer_profiles')
-      .select('*')
+      .select('daily_kcal_target')
       .eq('customer_id', params.id)
       .maybeSingle(),
     supabase
       .from('food_logs')
-      .select(
-        'id, logged_at, meal_type, raw_description, total_kcal, protein_g, carbs_g, fat_g'
-      )
+      .select('id, logged_at, meal_type, raw_description, total_kcal')
       .eq('customer_id', params.id)
-      .gte('logged_at', queryFrom.toISOString())
+      .gte('logged_at', startOfToday.toISOString())
       .order('logged_at', { ascending: false }),
     supabase
-      .from('messages')
-      .select('id, direction, content, agent_name, created_at')
+      .from('workout_sessions')
+      .select(
+        'id, status, started_at, training_days(day_number, title)'
+      )
       .eq('customer_id', params.id)
-      .order('created_at', { ascending: false })
-      .limit(3),
-    supabase
-      .from('coach_notes')
-      .select('id, content, created_at')
-      .eq('customer_id', params.id)
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from('training_plans')
-      .select('id, name, weeks, current_week, status, start_date')
-      .eq('customer_id', params.id)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .gte('started_at', startOfToday.toISOString())
+      .order('started_at', { ascending: false }),
     supabase
       .from('meal_plans')
-      .select('id, plan_date, status, total_kcal')
+      .select('plan_date, total_kcal, status')
       .eq('customer_id', params.id)
-      .gte('plan_date', todayKey)
+      .eq('plan_date', todayKey)
       .eq('status', 'published')
-      .order('plan_date', { ascending: true })
-      .limit(1)
       .maybeSingle(),
+    supabase
+      .from('coach_notes')
+      .select('id, content, updated_at')
+      .or(`customer_id.eq.${params.id},customer_id.is.null`)
+      .eq('is_active', true)
+      .order('updated_at', { ascending: false })
+      .limit(1),
+    supabase
+      .from('food_logs')
+      .select('id, logged_at, meal_type, raw_description, total_kcal')
+      .eq('customer_id', params.id)
+      .order('logged_at', { ascending: false })
+      .limit(5),
+    supabase
+      .from('workout_sessions')
+      .select(
+        'id, started_at, status, training_days(day_number, title)'
+      )
+      .eq('customer_id', params.id)
+      .order('started_at', { ascending: false })
+      .limit(5),
+    supabase
+      .from('messages')
+      .select('id, created_at, direction, content, agent_name')
+      .eq('customer_id', params.id)
+      .order('created_at', { ascending: false })
+      .limit(5),
   ]);
 
   const profile = profileRes.data;
-  const logs30 = logsRes.data ?? [];
-  const messages = msgsRes.data ?? [];
-  const activeNote = activeNoteRes.data;
-  const activeTrainingPlan = activeTrainingPlanRes.data;
-  const activeMealPlan = activeMealPlanRes.data;
+  const todayFood = todayFoodRes.data ?? [];
+  const todayWorkouts = todayWorkoutsRes.data ?? [];
+  const todayPlan = todayPlanRes.data;
+  const coachNote = coachNotesRes.data?.[0];
 
-  // Preview: nur letzte 3 Mahlzeiten (statt 8)
-  const recentLogs = logs30.slice(0, 3);
-
-  type DayBucket = {
-    kcal: number;
-    logCount: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-  };
-
-  const dailyMap = new Map<string, DayBucket>();
-  for (const key of dayKeys) {
-    dailyMap.set(key, { kcal: 0, logCount: 0, protein: 0, carbs: 0, fat: 0 });
-  }
-  for (const log of logs30) {
-    if (!log.logged_at) continue;
-    const key = viennaDay(new Date(log.logged_at));
-    const day = dailyMap.get(key);
-    if (!day) continue;
-    day.kcal += log.total_kcal ?? 0;
-    day.logCount += 1;
-    day.protein += Number(log.protein_g) || 0;
-    day.carbs += Number(log.carbs_g) || 0;
-    day.fat += Number(log.fat_g) || 0;
-  }
-
-  const days30 = dayKeys.map((date) => {
-    const v = dailyMap.get(date)!;
-    return { date, kcal: v.kcal, logCount: v.logCount };
-  });
-  const days7 = days30.slice(-7);
-  const macro7 = dayKeys.slice(-7).reduce(
-    (acc, key) => {
-      const v = dailyMap.get(key)!;
-      acc.protein += v.protein;
-      acc.carbs += v.carbs;
-      acc.fat += v.fat;
-      return acc;
-    },
-    { protein: 0, carbs: 0, fat: 0 }
+  const todayKcal = Math.round(
+    todayFood.reduce((sum, l) => sum + (Number(l.total_kcal) || 0), 0)
   );
-
-  const today = dailyMap.get(todayKey) ?? {
-    kcal: 0,
-    logCount: 0,
-    protein: 0,
-    carbs: 0,
-    fat: 0,
-  };
-
-  const streak = computeStreak(days30);
-  const avg7 = Math.round(days7.reduce((s, d) => s + d.kcal, 0) / 7);
-
-  const weightDelta =
-    profile?.weight_start_kg != null && profile?.weight_target_kg != null
-      ? Number(profile.weight_target_kg) - Number(profile.weight_start_kg)
+  const kcalTarget = profile?.daily_kcal_target ?? null;
+  const kcalPercent =
+    kcalTarget && kcalTarget > 0
+      ? Math.round((todayKcal / kcalTarget) * 100)
       : null;
+
+  const lastCompletedWorkout = todayWorkouts.find(
+    (w: any) => w.status === 'completed'
+  );
+  const lastWorkout: any = lastCompletedWorkout || todayWorkouts[0];
+
+  // === Recent activity (merge + sort) ===
+  const recentItems: RecentItem[] = [
+    ...(recentFoodRes.data ?? []).map((l): RecentItem => ({
+      id: `meal-${l.id}`,
+      kind: 'meal',
+      iso: l.logged_at,
+      title: l.raw_description ?? 'Mahlzeit',
+      subtitle: l.total_kcal != null ? `${l.total_kcal} kcal` : undefined,
+    })),
+    ...((recentWorkoutsRes.data ?? []) as any[]).map((w): RecentItem => {
+      const day = w.training_days;
+      const statusLabel =
+        w.status === 'completed' ? 'abgeschlossen'
+        : w.status === 'aborted' ? 'abgebrochen'
+        : w.status === 'paused' ? 'pausiert'
+        : 'läuft';
+      return {
+        id: `workout-${w.id}`,
+        kind: 'workout',
+        iso: w.started_at,
+        title: day
+          ? `Tag ${day.day_number} · ${day.title} ${statusLabel}`
+          : `Workout ${statusLabel}`,
+      };
+    }),
+    ...(recentMessagesRes.data ?? []).map((m): RecentItem => {
+      const isOutbound =
+        m.direction === 'outbound' || m.direction === 'out';
+      return {
+        id: `msg-${m.id}`,
+        kind: 'message',
+        iso: m.created_at,
+        title: isOutbound
+          ? `${m.agent_name ?? 'Bot'} →`
+          : '← Kunde',
+        subtitle:
+          (m.content ?? '').substring(0, 80) +
+          ((m.content ?? '').length > 80 ? '…' : ''),
+      };
+    }),
+  ]
+    .sort((a, b) => new Date(b.iso).getTime() - new Date(a.iso).getTime())
+    .slice(0, 3);
+
+  const lastActivityIso = recentItems[0]?.iso ?? null;
 
   const displayName =
     customer.first_name || customer.telegram_username || 'Kunde';
+  const username = customer.telegram_username
+    ? `@${customer.telegram_username}`
+    : null;
+  const statusLabel = STATUS_LABEL[customer.status] || customer.status;
+  const onboardedDate = formatOnboardedDate(
+    (customer as any).onboarded_at ?? (customer as any).created_at ?? null
+  );
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10">
+    <div className="max-w-5xl mx-auto px-6 py-10">
       <Link
-        href="/coach"
-        className="text-[11px] uppercase tracking-caps text-bone-faint hover:text-bone-muted transition-colors mb-6 inline-flex items-center gap-2"
+        href="/coach/customers"
+        className="text-[11px] uppercase tracking-caps text-bone-faint hover:text-bone-muted transition mb-8 inline-flex items-center gap-2"
       >
-        <span>←</span>
-        <span>Zurück zur Kundenliste</span>
+        ← Kunden
       </Link>
 
-      <div className="flex items-start justify-between gap-6 mb-10 flex-wrap">
+      {/* === HEADER === */}
+      <header className="mb-10 flex items-start justify-between gap-6 flex-wrap">
         <div>
           <h1 className="font-serif text-4xl text-bone leading-tight mb-2">
             {displayName}
           </h1>
-          {customer.telegram_username && (
-            <p className="text-sm text-bone-muted">
-              @{customer.telegram_username}
-            </p>
+          <p className="text-sm text-bone-muted">
+            {username && <>{username} · </>}
+            {onboardedDate && <>seit {onboardedDate}</>}
+          </p>
+        </div>
+        <div className="flex flex-col items-end gap-2 text-right">
+          <span className="text-[10px] uppercase tracking-caps text-gold font-medium px-3 py-1.5 border border-gold/40">
+            {statusLabel}
+          </span>
+          {lastActivityIso && (
+            <span className="text-[11px] text-bone-faint">
+              letzte Aktivität: {formatRelative(lastActivityIso)}
+            </span>
           )}
         </div>
-        <StatusBadge status={customer.status} />
-      </div>
+      </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-8 md:gap-12 items-center py-10 border-y border-white/[0.06] mb-0">
-        <ProgressRing
-          value={today.kcal}
-          goal={profile?.daily_kcal_target ?? null}
-          label="HEUTE"
-          unit="kcal"
-        />
-        <div className="flex flex-col gap-5 w-full">
-          <MacroBar
-            label="Protein"
-            value={today.protein}
-            goal={profile?.protein_target_g ?? null}
-            variant="gold"
-          />
-          <MacroBar
-            label="Kohlenhydrate"
-            value={today.carbs}
-            goal={profile?.carbs_target_g ?? null}
-            variant="soft"
-          />
-          <MacroBar
-            label="Fett"
-            value={today.fat}
-            goal={profile?.fat_target_g ?? null}
-            variant="deep"
-          />
-        </div>
-      </div>
-
-      <StatStrip>
-        <StatCell value={streak} label="Tage Streak" accent />
-        <StatCell value={avg7} label="7-Tage Ø kcal" />
-        <StatCell
-          value={
-            weightDelta != null
-              ? `${weightDelta > 0 ? '+' : ''}${weightDelta} kg`
-              : '—'
-          }
-          label="Gewichtsziel"
-        />
-      </StatStrip>
-
-      <Section title="Aktive Pläne" topMargin>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-white/[0.06]">
-          <Panel title="Ernährung">
-            {activeMealPlan ? (
-              <p className="text-sm text-bone">
-                Heutiger Plan veröffentlicht ·{' '}
-                <span className="text-bone-muted tabular-nums">
-                  {activeMealPlan.total_kcal ?? '—'} kcal
-                </span>
-              </p>
-            ) : (
-              <Empty>Kein veröffentlichter Plan für heute</Empty>
-            )}
-            <Link
-              href={`/coach/customers/${params.id}/nutrition`}
-              className="inline-block mt-4 text-[10px] uppercase tracking-caps text-gold/80 hover:text-gold transition font-medium"
-            >
-              → Ernährung bearbeiten
-            </Link>
-          </Panel>
-
-          <Panel title="Training">
-            {activeTrainingPlan ? (
-              <p className="text-sm text-bone">
-                {activeTrainingPlan.name} ·{' '}
-                <span className="text-bone-muted tabular-nums">
-                  Woche {activeTrainingPlan.current_week ?? 1} von{' '}
-                  {activeTrainingPlan.weeks ?? 4}
-                </span>
-              </p>
-            ) : (
-              <Empty>Kein aktiver Plan</Empty>
-            )}
-            <Link
-              href={`/coach/customers/${params.id}/training`}
-              className="inline-block mt-4 text-[10px] uppercase tracking-caps text-gold/80 hover:text-gold transition font-medium"
-            >
-              → Training bearbeiten
-            </Link>
-          </Panel>
-        </div>
-      </Section>
-
-      {activeNote && (
-        <Section title="Coach-Notiz" topMargin>
-          <div className="bg-ink-900 p-7">
-            <p className="text-sm text-bone italic leading-relaxed">
-              &ldquo;{activeNote.content}&rdquo;
+      {/* === HEUTE (3 Cards) === */}
+      <section className="mb-12">
+        <p className="text-[10px] tracking-caps uppercase text-gold font-medium mb-5">
+          Heute · {formatTodayHeader()}
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* KCAL */}
+          <div className="border border-white/[0.08] px-5 py-5 bg-black/20">
+            <p className="text-[9px] tracking-caps uppercase text-bone-faint font-medium mb-2">
+              Kalorien
             </p>
-            <Link
-              href={`/coach/customers/${params.id}/profile`}
-              className="inline-block mt-4 text-[10px] uppercase tracking-caps text-gold/80 hover:text-gold transition font-medium"
-            >
-              → Notiz bearbeiten
-            </Link>
+            <p className="font-serif text-3xl tabular-nums text-bone">
+              {todayKcal}
+              {kcalTarget && (
+                <span className="text-base text-bone-faint">
+                  {' '}/ {kcalTarget}
+                </span>
+              )}
+            </p>
+            <p className="text-[11px] text-bone-faint mt-1 tabular-nums">
+              {todayFood.length === 0
+                ? 'keine Mahlzeit'
+                : kcalPercent != null
+                ? `${kcalPercent}% des Ziels · ${todayFood.length} ${
+                    todayFood.length === 1 ? 'Mahlzeit' : 'Mahlzeiten'
+                  }`
+                : `${todayFood.length} ${
+                    todayFood.length === 1 ? 'Mahlzeit' : 'Mahlzeiten'
+                  }`}
+            </p>
           </div>
-        </Section>
-      )}
 
-      <Section title="Verlauf · 30 Tage" topMargin>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <KcalLast7Chart
-            data={days7}
-            target={profile?.daily_kcal_target ?? null}
-          />
-          <MacroBreakdown
-            protein={macro7.protein}
-            carbs={macro7.carbs}
-            fat={macro7.fat}
-          />
-          <StreakHeatmap data={days30} />
-          <WeightProgress
-            start={profile?.weight_start_kg ?? null}
-            target={profile?.weight_target_kg ?? null}
-          />
+          {/* WORKOUT */}
+          <div className="border border-white/[0.08] px-5 py-5 bg-black/20">
+            <p className="text-[9px] tracking-caps uppercase text-bone-faint font-medium mb-2">
+              Workout
+            </p>
+            {lastWorkout ? (
+              <>
+                <p className="font-serif text-3xl tabular-nums text-bone">💪</p>
+                <p className="text-[11px] text-bone-faint mt-1">
+                  {lastWorkout.training_days
+                    ? `Tag ${lastWorkout.training_days.day_number} · ${
+                        lastWorkout.status === 'completed'
+                          ? 'abgeschlossen'
+                          : lastWorkout.status === 'aborted'
+                          ? 'abgebrochen'
+                          : 'läuft'
+                      }`
+                    : lastWorkout.status}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-serif text-3xl tabular-nums text-bone-faint">
+                  —
+                </p>
+                <p className="text-[11px] text-bone-faint mt-1 italic">
+                  heute keins
+                </p>
+              </>
+            )}
+          </div>
+
+          {/* PLAN */}
+          <div
+            className={`border ${
+              todayPlan ? 'border-gold/40' : 'border-white/[0.08]'
+            } px-5 py-5 bg-black/20`}
+          >
+            <p className="text-[9px] tracking-caps uppercase text-bone-faint font-medium mb-2">
+              Meal-Plan
+            </p>
+            {todayPlan ? (
+              <>
+                <p className="font-serif text-3xl tabular-nums text-gold">
+                  ✓
+                </p>
+                <p className="text-[11px] text-bone-faint mt-1 tabular-nums">
+                  {todayPlan.total_kcal != null
+                    ? `${todayPlan.total_kcal} kcal geplant`
+                    : 'aktiv für heute'}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-serif text-3xl tabular-nums text-bone-faint">
+                  —
+                </p>
+                <p className="text-[11px] text-bone-faint mt-1 italic">
+                  kein Plan
+                </p>
+              </>
+            )}
+          </div>
         </div>
-      </Section>
+      </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-px bg-white/[0.06] mt-12">
-        <Panel title="Profil">
-          {profile ? (
-            <>
-              <dl className="divide-y divide-white/[0.06]">
-                <ProfileRow label="Alter">{profile.age ?? '—'}</ProfileRow>
-                <ProfileRow label="Geschlecht">
-                  {profile.gender ?? '—'}
-                </ProfileRow>
-                <ProfileRow label="Größe">
-                  {profile.height_cm ? `${profile.height_cm} cm` : '—'}
-                </ProfileRow>
-                <ProfileRow label="Gewicht">
-                  {profile.weight_start_kg
-                    ? `${profile.weight_start_kg} kg`
-                    : '—'}
-                  {profile.weight_target_kg ? (
-                    <>
-                      <span className="mx-2 text-bone-muted">→</span>
-                      <span className="text-gold-soft">
-                        {profile.weight_target_kg} kg
-                      </span>
-                    </>
-                  ) : null}
-                </ProfileRow>
-                <ProfileRow label="Ziel">
-                  {labelGoal(profile.goal)}
-                </ProfileRow>
-                <ProfileRow label="Erfahrung">
-                  {profile.experience_level ?? '—'}
-                </ProfileRow>
-                <ProfileRow label="Equipment">
-                  {profile.equipment ?? '—'}
-                </ProfileRow>
-                <ProfileRow label="Allergien">
-                  {profile.allergies && profile.allergies.length > 0
-                    ? profile.allergies.join(', ')
-                    : 'Keine'}
-                </ProfileRow>
-                <ProfileRow label="Onboarded">
-                  {formatDate(customer.onboarded_at)}
-                </ProfileRow>
-              </dl>
-              <Link
-                href={`/coach/customers/${params.id}/profile`}
-                className="inline-block mt-5 text-[10px] uppercase tracking-caps text-gold/80 hover:text-gold transition font-medium"
-              >
-                → Profil bearbeiten
-              </Link>
-            </>
-          ) : (
-            <Empty>Noch kein Profil — Intake nicht abgeschlossen.</Empty>
-          )}
-        </Panel>
+      {/* === COACH-NOTIZ === */}
+      <section className="mb-12">
+        <div className="flex items-baseline justify-between mb-3">
+          <p className="text-[10px] tracking-caps uppercase text-gold font-medium">
+            Coach-Notiz
+          </p>
+          <Link
+            href={`/coach/customers/${params.id}/profile`}
+            className="text-[10px] uppercase tracking-caps text-bone-faint hover:text-gold transition font-medium"
+          >
+            → bearbeiten
+          </Link>
+        </div>
+        {coachNote ? (
+          <p className="font-serif text-xl text-bone-muted leading-relaxed italic">
+            &ldquo;{coachNote.content}&rdquo;
+          </p>
+        ) : (
+          <p className="text-sm text-bone-faint italic">
+            Noch keine Notiz hinterlegt.
+          </p>
+        )}
+      </section>
 
-        <Panel title="Letzte Aktivität">
-          {recentLogs.length === 0 && messages.length === 0 ? (
-            <Empty>Noch keine Aktivität.</Empty>
-          ) : (
-            <>
-              {recentLogs.length > 0 && (
-                <div className="mb-6">
-                  <p className="text-[10px] tracking-caps uppercase text-bone-faint font-medium mb-3">
-                    Mahlzeiten
+      {/* === LETZTE AKTIVITÄT === */}
+      <section className="mb-12">
+        <div className="flex items-baseline justify-between mb-5">
+          <p className="text-[10px] tracking-caps uppercase text-gold font-medium">
+            Letzte Aktivität
+          </p>
+          <Link
+            href={`/coach/customers/${params.id}/activity`}
+            className="text-[10px] uppercase tracking-caps text-bone-faint hover:text-gold transition font-medium"
+          >
+            → alle anzeigen
+          </Link>
+        </div>
+        {recentItems.length === 0 ? (
+          <p className="text-sm text-bone-faint italic">
+            Noch keine Aktivität.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {recentItems.map((item) => (
+              <li key={item.id} className="flex gap-3 items-baseline">
+                <span className="text-base">
+                  {item.kind === 'meal'
+                    ? '🍽'
+                    : item.kind === 'workout'
+                    ? '💪'
+                    : '💬'}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-bone leading-relaxed">
+                    {item.title}
                   </p>
-                  {recentLogs.map((l) => (
-                    <MealRow
-                      key={l.id}
-                      type={l.meal_type}
-                      description={l.raw_description}
-                      protein={l.protein_g != null ? Number(l.protein_g) : null}
-                      carbs={l.carbs_g != null ? Number(l.carbs_g) : null}
-                      fat={l.fat_g != null ? Number(l.fat_g) : null}
-                      kcal={l.total_kcal}
-                      loggedAt={l.logged_at}
-                    />
-                  ))}
+                  {item.subtitle && (
+                    <p className="text-[11px] text-bone-muted italic mt-0.5 truncate">
+                      {item.subtitle}
+                    </p>
+                  )}
                 </div>
-              )}
-              {messages.length > 0 && (
-                <div>
-                  <p className="text-[10px] tracking-caps uppercase text-bone-faint font-medium mb-3">
-                    Nachrichten
-                  </p>
-                  {messages.map((m) => (
-                    <MessageRow
-                      key={m.id}
-                      direction={m.direction}
-                      content={m.content}
-                      agentName={m.agent_name}
-                      createdAt={m.created_at}
-                    />
-                  ))}
-                </div>
-              )}
-              <Link
-                href={`/coach/customers/${params.id}/activity`}
-                className="inline-block mt-5 text-[10px] uppercase tracking-caps text-gold/80 hover:text-gold transition font-medium"
-              >
-                → Alle Aktivitäten anzeigen
-              </Link>
-            </>
-          )}
-        </Panel>
-      </div>
+                <span className="text-[11px] text-bone-faint tabular-nums whitespace-nowrap">
+                  {formatRelative(item.iso)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
-      {/* 4 NAV-CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-px bg-white/[0.06] mt-12">
-        <NavCard
-          href={`/coach/customers/${params.id}/profile`}
-          title="Profil"
-          subtitle="Tagesziele & Notizen"
-        />
-        <NavCard
-          href={`/coach/customers/${params.id}/nutrition`}
-          title="Ernährung"
-          subtitle="Food-Library + Wochenplan"
-        />
-        <NavCard
-          href={`/coach/customers/${params.id}/training`}
-          title="Training"
-          subtitle="KI-Generator + Editor"
-        />
-        <NavCard
-          href={`/coach/customers/${params.id}/activity`}
-          title="Aktivität"
-          subtitle="Verlauf & Nachrichten"
-        />
-      </div>
+      {/* === NAV-CARDS === */}
+      <nav className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-12">
+        {NAV_CARDS.map((card) => (
+          <Link
+            key={card.href}
+            href={`/coach/customers/${params.id}/${card.href}`}
+            className="group block border border-white/[0.08] px-5 py-5 hover:border-gold/40 hover:bg-white/[0.02] transition"
+          >
+            <p className="font-serif text-2xl text-bone leading-tight mb-2 group-hover:text-gold transition-colors">
+              {card.label} →
+            </p>
+            <p className="text-[11px] text-bone-muted leading-relaxed">
+              {card.subtitle}
+            </p>
+          </Link>
+        ))}
+      </nav>
     </div>
-  );
-}
-
-/* ============== local helpers ============== */
-
-function Section({
-  title,
-  topMargin = false,
-  children,
-}: {
-  title: string;
-  topMargin?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className={topMargin ? 'mt-12' : ''}>
-      <h2 className="text-[9px] tracking-caps uppercase text-bone-muted font-medium mb-6">
-        {title}
-      </h2>
-      {children}
-    </section>
-  );
-}
-
-function Panel({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="bg-ink-900 p-7">
-      <h3 className="text-[9px] tracking-caps uppercase text-bone-muted font-medium mb-5">
-        {title}
-      </h3>
-      {children}
-    </div>
-  );
-}
-
-function ProfileRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 py-3 first:pt-0 last:pb-0">
-      <dt className="text-[10px] tracking-capsTight uppercase text-bone-muted shrink-0 font-medium">
-        {label}
-      </dt>
-      <dd className="text-bone text-sm text-right">{children}</dd>
-    </div>
-  );
-}
-
-function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm text-bone-muted italic">{children}</p>;
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    active: 'border-gold/40 text-gold',
-    intake: 'border-bone/30 text-bone',
-    paused: 'border-bone-muted/30 text-bone-muted',
-    archived: 'border-bone-faint text-bone-faint',
-  };
-  const style = styles[status] ?? styles.paused;
-  const label = STATUS_LABELS[status] ?? status;
-  return (
-    <span
-      className={`text-[10px] px-3 py-1.5 border ${style} tracking-caps uppercase font-medium`}
-    >
-      {label}
-    </span>
-  );
-}
-
-function NavCard({
-  href,
-  title,
-  subtitle,
-}: {
-  href: string;
-  title: string;
-  subtitle: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="bg-ink-900 p-7 hover:bg-ink-800 transition-colors group"
-    >
-      <p className="font-serif text-2xl text-bone leading-tight mb-2 group-hover:text-gold transition-colors">
-        {title} →
-      </p>
-      <p className="text-sm text-bone-muted">{subtitle}</p>
-    </Link>
   );
 }
