@@ -79,18 +79,7 @@ interface Props {
 
 export default function TrainingPlanEditor({ customerId, plan }: Props) {
   const [isPending, startTransition] = useTransition();
-  const [activeDayId, setActiveDayId] = useState<string | null>(
-    plan?.days?.[0]?.id ?? null
-  );
   const [duplicateTarget, setDuplicateTarget] = useState<TrainingDay | null>(null);
-
-  useEffect(() => {
-    if (plan && activeDayId && !plan.days.find(d => d.id === activeDayId)) {
-      setActiveDayId(plan.days[0]?.id ?? null);
-    } else if (plan && !activeDayId && plan.days.length > 0) {
-      setActiveDayId(plan.days[0].id);
-    }
-  }, [plan, activeDayId]);
 
   if (!plan) {
     return (
@@ -126,8 +115,6 @@ export default function TrainingPlanEditor({ customerId, plan }: Props) {
       </section>
     );
   }
-
-  const activeDay = plan.days.find(d => d.id === activeDayId) ?? plan.days[0];
 
   return (
     <>
@@ -241,55 +228,52 @@ export default function TrainingPlanEditor({ customerId, plan }: Props) {
           />
         </div>
 
-        {/* TAB-STRIP */}
-        <div className="flex gap-1 mt-7 pb-0 border-b border-[#1F1E1A] overflow-x-auto">
-          {plan.days.map(day => {
-            const isActive = day.id === activeDay?.id;
-            return (
-              <button
-                key={day.id}
-                onClick={() => setActiveDayId(day.id)}
-                className={`px-4 py-2.5 text-[12px] tracking-[1px] uppercase whitespace-nowrap -mb-px ${
-                  isActive
-                    ? 'text-[#D4AF6C] border-b border-[#D4AF6C]'
-                    : 'text-[#8E8B83] hover:text-[#F5F2EA]'
-                }`}
-              >
-                Tag {day.day_number} · {day.title}
-              </button>
-            );
-          })}
+        {/* TAGE-SECTION-HEADER */}
+        <div className="flex items-center justify-between mt-7 pb-3 border-b border-[#1F1E1A]">
+          <div className="text-[11px] text-[#5C5A55] tracking-[1.8px] uppercase">
+            Tage ({plan.days.length})
+          </div>
           <button
             onClick={() =>
               startTransition(async () => {
-                const newDay = await addDay(plan.id, customerId);
-                setActiveDayId(newDay.id);
+                await addDay(plan.id, customerId);
               })
             }
             disabled={isPending}
-            className="px-4 py-2.5 text-[12px] tracking-[1px] uppercase text-[#5C5A55] hover:text-[#D4AF6C] flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50"
+            className="px-3 py-1.5 text-[11px] tracking-[1px] uppercase text-[#D4AF6C] hover:bg-[#D4AF6C]/10 border border-[#D4AF6C]/40 rounded flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50 transition-colors"
           >
             <PlusIcon />
-            Tag
+            Tag hinzufügen
           </button>
         </div>
 
-        {/* DAY-EDITOR */}
-        {activeDay && (
-          <DayEditor
-            key={activeDay.id}
-            day={activeDay}
-            customerId={customerId}
-            isPending={isPending}
-            startTransition={startTransition}
-            onDelete={() => {
-              startTransition(async () => {
-                await deleteDay(activeDay.id, customerId);
-                setActiveDayId(null);
-              });
-            }}
-            onDuplicate={() => setDuplicateTarget(activeDay)}
-          />
+        {/* ALL DAYS — RENDERED AS CARDS */}
+        {plan.days.length === 0 ? (
+          <p className="text-[14px] text-[#5C5A55] italic py-8 text-center">
+            Noch keine Tage. Klick &ldquo;Tag hinzufügen&rdquo; um zu starten.
+          </p>
+        ) : (
+          <div className="space-y-6 mt-6">
+            {plan.days.map((day) => (
+              <div
+                key={day.id}
+                className="border border-[#1F1E1A] rounded-xl p-5 bg-[#0E0D10]"
+              >
+                <DayEditor
+                  day={day}
+                  customerId={customerId}
+                  isPending={isPending}
+                  startTransition={startTransition}
+                  onDelete={() => {
+                    startTransition(async () => {
+                      await deleteDay(day.id, customerId);
+                    });
+                  }}
+                  onDuplicate={() => setDuplicateTarget(day)}
+                />
+              </div>
+            ))}
+          </div>
         )}
       </section>
 
@@ -299,9 +283,8 @@ export default function TrainingPlanEditor({ customerId, plan }: Props) {
           day={duplicateTarget}
           customerId={customerId}
           onClose={() => setDuplicateTarget(null)}
-          onSuccess={newDayId => {
+          onSuccess={() => {
             setDuplicateTarget(null);
-            setActiveDayId(newDayId);
           }}
         />
       )}
