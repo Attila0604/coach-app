@@ -58,7 +58,9 @@ type CustomerSummary = {
   kcalTarget: number | null;
   todayMealCount: number;
   hasPublishedPlanToday: boolean;
-  lastActivityIso: string | null;
+  lastTodayIso: string | null;
+  lastActivityEverIso: string | null;
+  daysSinceActivity: number | null;
 };
 
 type StreamItem = {
@@ -94,6 +96,8 @@ export default async function CoachDashboardPage() {
   since7d.setDate(since7d.getDate() - 7);
   const since3d = new Date();
   since3d.setDate(since3d.getDate() - 3);
+  const since30d = new Date();
+  since30d.setDate(since30d.getDate() - 30);
 
   // === Load active customers (scoped or all) ===
   let customersQuery = supabase
@@ -121,6 +125,9 @@ export default async function CoachDashboardPage() {
     streamFoodRes,
     streamWorkoutsRes,
     streamMessagesRes,
+    lastFood30Res,
+    lastWorkout30Res,
+    lastMessage30Res,
   ] = await Promise.all([
     supabase
       .from('customer_profiles')
@@ -173,6 +180,24 @@ export default async function CoachDashboardPage() {
       .gte('created_at', since7d.toISOString())
       .order('created_at', { ascending: false })
       .limit(15),
+    supabase
+      .from('food_logs')
+      .select('customer_id, logged_at')
+      .in('customer_id', customerIds)
+      .gte('logged_at', since30d.toISOString())
+      .order('logged_at', { ascending: false }),
+    supabase
+      .from('workout_sessions')
+      .select('customer_id, started_at')
+      .in('customer_id', customerIds)
+      .gte('started_at', since30d.toISOString())
+      .order('started_at', { ascending: false }),
+    supabase
+      .from('messages')
+      .select('customer_id, created_at')
+      .in('customer_id', customerIds)
+      .gte('created_at', since30d.toISOString())
+      .order('created_at', { ascending: false }),
   ]);
 
   const profiles = profilesRes.data ?? [];
@@ -186,6 +211,18 @@ export default async function CoachDashboardPage() {
   const todayPlans = todayPlansRes.data ?? [];
   const week7Workouts = week7WorkoutsRes.data ?? [];
 
+  // === Build last-activity map (over 30 days) ===
+  const lastActivityMap = new Map<string, string>();
+  const updateLast = (customerId: string, iso: string) => {
+    const prev = lastActivityMap.get(customerId);
+    if (!prev || iso > prev) lastActivityMap.set(customerId, iso);
+  };
+  for (const f of lastFood30Res.data ?? []) updateLast(f.customer_id, f.logged_at);
+  for (const w of lastWorkout30Res.data ?? []) updateLast(w.customer_id, w.started_at);
+  for (const m of lastMessage30Res.data ?? []) updateLast(m.customer_id, m.created_at);
+
+  const nowMs = Date.now();
+
   // === Aggregate per-customer summary ===
   const summaries: CustomerSummary[] = customers.map((c) => {
     const cFood = todayFoodLogs.filter((l) => l.customer_id === c.id);
@@ -198,7 +235,7 @@ export default async function CoachDashboardPage() {
       0
     );
 
-    // last activity timestamp = max of any activity in any timeframe
+    // today's last timestamp
     const allTimes: string[] = [
       ...cFood.map((l) => l.logged_at),
       ...cWorkouts.map((w) => w.started_at),
@@ -207,6 +244,13 @@ export default async function CoachDashboardPage() {
     const lastTodayIso = allTimes.length
       ? allTimes.sort().reverse()[0]
       : null;
+
+    // last ever
+    const lastEverIso = lastActivityMap.get(c.id) ?? null;
+    const daysSinceActivity =
+      lastEverIso != null
+        ? Math.floor((nowMs - new Date(lastEverIso).getTime()) / 86400000)
+        : null;
 
     return {
       customer: c,
@@ -217,14 +261,19 @@ export default async function CoachDashboardPage() {
       kcalTarget: profileByCustomer.get(c.id) ?? null,
       todayMealCount: cFood.length,
       hasPublishedPlanToday: !!cPlan,
-      lastActivityIso: lastTodayIso,
+      lastTodayIso,
+      lastActivityEverIso: lastEverIso,
+      daysSinceActivity,
     };
   });
 
   const activeToday = summaries.filter(
     (s) => s.hasWorkoutToday || s.hasMealToday || s.hasMessageToday
   );
-  const inactive = summaries.filter((s) => !s.lastActivityIso);
+  // Inaktiv = keine Aktivität seit 3+ Tagen (oder nie)
+  const inactive = summaries.filter(
+    (s) => s.daysSinceActivity == null || s.daysSinceActivity >= 3
+  );
 
   // === Build global stream ===
   const streamItems: StreamItem[] = [
@@ -287,7 +336,7 @@ export default async function CoachDashboardPage() {
       (a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     )
-    .slice(0, 15);
+    .slice(0, 3);
 
   // === STATS ===
   const activeCount = customers.length;
@@ -341,7 +390,7 @@ export default async function CoachDashboardPage() {
       {inactive.length > 0 && (
         <section className="mb-12">
           <p className="text-[10px] tracking-caps uppercase text-red-400/80 font-medium mb-5">
-            Brauchen Aufmerksamkeit ({inactive.length})
+            Brauchen Aufmerksamkeit · {inactive.length} {inactive.length === 1 ? 'Kunde' : 'Kunden'} ≥3 Tage inaktiv
           </p>
           <div className="space-y-1">
             {inactive.map((s) => (
@@ -353,9 +402,17 @@ export default async function CoachDashboardPage() {
 
       {/* === GLOBALE AKTIVITÄT === */}
       <section className="mb-12">
-        <p className="text-[10px] tracking-caps uppercase text-gold font-medium mb-5">
-          Letzte Aktivität · alle Kunden
-        </p>
+        <div className="flex items-baseline justify-between mb-5">
+          <p className="text-[10px] tracking-caps uppercase text-gold font-medium">
+            Letzte Aktivität · alle Kunden
+          </p>
+          <Link
+            href="/coach/customers"
+            className="text-[10px] uppercase tracking-caps text-bone-faint hover:text-gold transition font-medium"
+          >
+            → alle anzeigen
+          </Link>
+        </div>
         {streamItems.length === 0 ? (
           <p className="text-sm text-bone-faint italic">
             Noch keine Aktivität in den letzten 7 Tagen.
@@ -450,7 +507,7 @@ function CustomerTodayRow({ summary: s }: { summary: CustomerSummary }) {
         )}
       </span>
       <span className="text-[11px] text-bone-faint tabular-nums whitespace-nowrap">
-        {s.lastActivityIso && formatTime(s.lastActivityIso)}
+        {s.lastTodayIso && formatTime(s.lastTodayIso)}
       </span>
       <span className="text-bone-faint group-hover:text-gold transition">→</span>
     </Link>
@@ -461,16 +518,22 @@ function CustomerTodayRow({ summary: s }: { summary: CustomerSummary }) {
 function InactiveRow({ summary: s }: { summary: CustomerSummary }) {
   const name =
     s.customer.first_name ?? s.customer.telegram_username ?? 'Kunde';
+  const label =
+    s.daysSinceActivity == null
+      ? 'Noch keine Aktivität'
+      : s.daysSinceActivity >= 30
+      ? 'Über 30 Tage inaktiv'
+      : `Letzte Aktivität vor ${s.daysSinceActivity} Tagen`;
   return (
     <Link
       href={`/coach/customers/${s.customer.id}`}
       className="flex items-center gap-4 px-4 py-3 border-b border-white/[0.04] hover:bg-white/[0.02] transition group"
     >
-      <span className="text-sm text-bone font-medium w-32 truncate">
+      <span className="text-sm text-bone font-medium w-40 truncate">
         {name}
       </span>
       <span className="text-[11px] uppercase tracking-caps text-red-400/70 italic flex-1">
-        Keine Aktivität heute
+        {label}
       </span>
       <span className="text-bone-faint group-hover:text-gold transition">→</span>
     </Link>
