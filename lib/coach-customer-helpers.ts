@@ -42,6 +42,41 @@ export function viennaDay(d: Date): string {
   return d.toLocaleDateString('sv-SE', { timeZone: TZ });
 }
 
+// Wiens UTC-Offset (ms) zu einem Zeitpunkt — +1h Winter, +2h Sommer (DST-sicher)
+export function viennaOffsetMs(at: Date): number {
+  const p: Record<string, string> = {};
+  for (const part of new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(at)) {
+    p[part.type] = part.value;
+  }
+  const hour = p.hour === '24' ? 0 : Number(p.hour);
+  const asWall = Date.UTC(
+    Number(p.year),
+    Number(p.month) - 1,
+    Number(p.day),
+    hour,
+    Number(p.minute),
+    Number(p.second)
+  );
+  return asWall - at.getTime();
+}
+
+// UTC-Instant von Wien-Mitternacht für den Wien-Tag, der `d` enthält.
+// Ersetzt das fehleranfällige hardcoded `+02:00` (im Winter sonst 1h daneben).
+export function viennaStartOfDayUtc(d: Date = new Date()): Date {
+  const key = viennaDay(d);
+  const offset = viennaOffsetMs(new Date(`${key}T12:00:00Z`));
+  return new Date(new Date(`${key}T00:00:00Z`).getTime() - offset);
+}
+
 export function buildWindow() {
   const todayKey = viennaDay(new Date());
   const anchor = new Date(`${todayKey}T12:00:00Z`);
