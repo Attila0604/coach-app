@@ -1,5 +1,10 @@
 import Link from 'next/link';
-import { getCustomerForCoach, viennaDay, TZ } from '@/lib/coach-customer-helpers';
+import {
+  getCustomerForCoach,
+  viennaDay,
+  viennaStartOfDayUtc,
+  TZ,
+} from '@/lib/coach-customer-helpers';
 
 const NAV_CARDS = [
   { href: 'profile', label: 'Profil', subtitle: 'Tagesziele & Notizen' },
@@ -79,7 +84,7 @@ export default async function CustomerOverviewPage({
   const { supabase, customer } = await getCustomerForCoach(params.id);
 
   const todayKey = viennaDay(new Date());
-  const startOfToday = new Date(`${todayKey}T00:00:00+02:00`);
+  const startOfToday = viennaStartOfDayUtc();
   const since7d = new Date();
   since7d.setDate(since7d.getDate() - 7);
 
