@@ -1,104 +1,76 @@
-# AGENTS.md
+# AGENTS.md — Projekt- & Ökosystem-Kontext (coach-app)
 
-Kontext fuer Coding Agents, die an `coach-app` arbeiten. Diese App ist die
-Coach-Seite eines Coaching-Oekosystems und teilt sich eine Supabase-Datenbank
-mit `coach-bot` (Telegram-Bot, Python/FastAPI) und `coach-customer-app`
-(Kunden-PWA).
+> Dauerhaftes Gedächtnis für KI-Agenten und Menschen. Ein neuer Agent startet
+> ohne Vorwissen — diese Datei bringt ihn auf Stand.
+> PFLEGE: Bei Änderungen an Datenmodell, Auth, Routen oder Repo-Zusammenspiel
+> diese Datei im selben PR aktualisieren.
 
-## Architektur
+## 1. Das große Ganze: drei Repos, eine Datenbank
 
-- Next.js 14 App Router, React 18, TypeScript und Tailwind CSS.
-- Supabase liefert Auth, Postgres und RLS. Es gibt in diesem Repo keine
-  SQL-Migrations oder Schema-Dateien; das aktive Datenmodell muss aus Code und
-  Supabase-Projektkontext abgeleitet werden.
-- Server Components laden Daten direkt ueber `lib/supabase-server.ts`.
-  Interaktive Formulare und Editoren liegen in Client Components unter
-  `components/**`.
-- Supabase Auth schuetzt `/coach/**` ueber `middleware.ts`. `app/page.tsx`
-  leitet je nach Session nach `/coach` oder `/login` weiter.
-- Claude-Aufrufe laufen serverseitig ueber `lib/claude.ts` und benoetigen
-  `ANTHROPIC_API_KEY`.
-- UI- und Fehlermeldungen sind auf Deutsch gehalten.
+Dieses Repo (`coach-app`) ist die **Coach-Steuerzentrale** — eine von drei
+Komponenten, die sich EINE Supabase-(Postgres-)DB teilen:
 
-## Wichtige Bereiche
+- `coach-bot` (Python/FastAPI): Telegram-Bot. Onboarding + Food-Logging
+  (Text/Foto via Claude), Coach-Quick-Commands. Schreibt `customers`,
+  `customer_profiles`, `food_logs`, `messages`, `conversation_states`.
+- `coach-app` (DIESES Repo, Next.js): Coach-Dashboard,
+  KI-Trainings-/Meal-Plan-Generator (Claude), Kunden-Monitoring. Schreibt
+  `training_*`, `meal_plans`, `coach_notes`, Makro-Ziele.
+- `coach-customer-app` (Next.js): Kunden-PWA. Telegram-Magic-Code-Login,
+  zeigt Pläne, Workout-Player. Schreibt `workout_sessions`, `workout_logs`.
 
-- `app/coach/page.tsx` - Coach-Dashboard mit Tagesstatus, inaktiven Kunden und
-  Aktivitaetsstream.
-- `app/coach/customers/page.tsx` - Kundenliste.
-- `app/coach/customers/[id]/**` - Kunden-Hub, Profil, Ernaehrung, Training und
-  Aktivitaetsverlauf.
-- `app/coach/customers/[id]/actions.ts` - Server Actions fuer Ziele,
-  Coach-Notizen, Foods, Settings und Meal-Plan-Workflows.
-- `lib/actions/training-plan.ts` - Server Actions fuer Trainingsplaene,
-  Trainingstage, Uebungen und KI-Generierung.
-- `lib/coach-customer-helpers.ts` - zentrale Coach-/Customer-Guards,
-  Status-Labels und Vienna-Zeitzonenhelfer.
+> Cloud-Agenten arbeiten pro Repo: von hier ist nur `coach-app` commit-bar.
+> Das vollständige, rekonstruierte DB-Schema liegt in
+> `coach-customer-app/db/schema.reference.sql`.
 
-## Datenmodell-Kontext
+## 2. Dieses Repo im Detail
 
-Die DB wird von mehreren Apps genutzt. Aenderungen an Tabellen, Spalten,
-Enums oder JSON-Formaten koennen `coach-bot` und `coach-customer-app`
-beeinflussen.
+Stack: Next.js 14 (App Router), React 18, TypeScript, Tailwind, Supabase
+(`@supabase/ssr`), Anthropic Claude. Look: ink/bone/gold, Fraunces. Sprache: DE.
 
-Aus dem Code ersichtliche Kernbeziehungen:
+Auth: ECHTE Supabase-Auth (E-Mail/Passwort, `signInWithPassword` in
+`app/login/actions.ts`). `middleware.ts` schützt `/coach/*` via
+`supabase.auth.getUser()`. Tabelle `coaches` mit `user_id` (Auth-Link) und
+`role` (`admin` sieht alle Kunden, sonst nur eigene via `coach_id`).
 
-```text
-auth.users
-  -> coaches(user_id)
-    -> customers(coach_id)
-      -> customer_profiles(customer_id)
-      -> customer_foods(customer_id, coach_id)
-      -> coach_notes(customer_id, coach_id)
-      -> meal_plans(customer_id, coach_id)
-      -> food_logs(customer_id)
-      -> messages(customer_id)
-      -> training_plans(customer_id, coach_id)
-        -> training_days(training_plan_id)
-          -> exercises(training_day_id)
-      -> workout_sessions(customer_id, training_day_id)
-        -> workout_logs(workout_session_id, exercise_id)
-```
+Routen:
 
-Wichtige Konventionen:
+- `app/login/` — Login.
+- `app/coach/page.tsx` — Dashboard (Stat-Cards, heute aktiv, inaktiv, Stream).
+- `app/coach/customers/page.tsx` — Kundenliste.
+- `app/coach/customers/[id]/` — Detail + Unterseiten `profile` / `nutrition` /
+  `training` / `activity`, plus `charts.tsx`, `actions.ts`.
 
-- Tabellen und Spalten verwenden snake_case.
-- Coach-Zugriff laeuft ueber `coaches.user_id = auth.users.id`; normale Coaches
-  sehen nur `customers.coach_id = coaches.id`, Admin-Coaches koennen alle Kunden
-  sehen.
-- `customers.status` wird im Code vor allem als `active`, `intake`, `paused`
-  oder `archived` behandelt.
-- `messages.direction` kennt in der gemeinsamen DB nur `in` und `out`:
-  - `in` = Kunde/Bot-User -> System
-  - `out` = System/Bot/Coach -> Kunde
-- Tagesgrenzen und Datumslabels sollen die Zeitzone `Europe/Vienna` verwenden.
-  Keine hardcodierten UTC-Offsets einbauen.
-- `meal_plans.meals` ist JSON und wird sowohl von Claude generiert als auch in
-  der UI bearbeitet. Strukturierte Parser/Normalizer bevorzugen statt String-
-  Manipulation.
-- Trainingsplan-Statuswerte sind in `lib/types/training.ts` typisiert; bei
-  DB-nahen Aenderungen diese Typen mitpflegen.
+lib:
 
-## Umgebungsvariablen
+- `claude.ts` — Anthropic-Wrapper (Modell-Default `claude-sonnet-4-6`).
+- `coach-customer-helpers.ts` — DST-sichere Europe/Vienna-Helfer +
+  `getCustomerForCoach()` (Auth + Ownership-Scoping).
+- `supabase-server.ts` / `supabase-browser.ts`.
+- `actions/training-plan.ts` — KI-Generator + Approval-Workflow
+  (`draft` → `activate`/`discard`) + CRUD Pläne/Tage/Übungen.
+- `actions/customer-profile.ts`, `types/training.ts`.
+- `components/` — Editor-Werkzeugkasten (`TrainingPlanEditor`,
+  `WeeklyMealPlanEditor`, `GoalsEditor`, `ProfileEditor`, `CoachNotesEditor`,
+  `NutritionSetup`, ...).
 
-`.env.example` soll alle benoetigten Variablen enthalten:
+Env-Variablen: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+`ANTHROPIC_API_KEY` (für die KI-Generatoren).
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `ANTHROPIC_API_KEY`
+## 3. Konventionen
 
-Keine Service-Role-Keys oder Secrets in das Repo committen.
+- Sprache DE (UI + Commits/PRs). Branches `cursor/<name>`, Draft-PRs gegen
+  `main`.
+- Zeit immer Europe/Vienna-sicher (`coach-customer-helpers.ts`).
+- `messages.direction` kennt in der gemeinsamen DB nur `in` und `out`.
+- `meal_plans.meals[].meal_type` ist ENGLISCH (`breakfast`/`lunch`/`dinner`/
+  `snack`); `food_logs.meal_type` ist DEUTSCH
+  (`fruehstueck`/`mittag`/`abend`/`snack`).
+- Build prüfen mit `npm run build`.
 
-## Build und Verifikation
+## 4. Kürzlich adressierte Punkte
 
-- Standard-Check: `npm run build`
-- Dev-Server: `npm run dev`
-- Es gibt aktuell keine automatisierten Tests im Repo. Bei Server Actions oder
-  DB-Verhalten gezielt manuell pruefen und Build-Fehler ernst nehmen.
-
-## Pflege-Hinweis
-
-Diese Datei ist Arbeitskontext fuer zukuenftige Agents. Wenn sich Routen,
-Supabase-Tabellen, gemeinsam genutzte DB-Konventionen, Env-Variablen oder
-Integrationspunkte zu `coach-bot`/`coach-customer-app` aendern, diese
-`AGENTS.md` im selben PR aktualisieren. Veralteter Kontext fuehrt sonst schnell
-zu Cross-App-Regressions in der gemeinsamen Supabase-Datenbank.
+- `ANTHROPIC_API_KEY` muss in `.env.example` dokumentiert sein, weil
+  `lib/claude.ts` ihn braucht.
+- Toter Code `direction === 'outbound'` im Dashboard wurde entfernt; die DB
+  verwendet `messages.direction` nur als `in`/`out`.
