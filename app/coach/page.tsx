@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import type { ReactNode } from 'react';
 import { createClient } from '@/lib/supabase-server';
 
 const TZ = 'Europe/Vienna';
@@ -380,98 +381,130 @@ export default async function CoachDashboardPage() {
   const mealPlanTodayCount = summaries.filter((s) => s.hasPublishedPlanToday).length;
 
   return (
-    <div>
-      <p className="text-[10px] tracking-caps uppercase text-gold font-medium mb-3">
-        {isAdmin ? 'Admin · Übersicht' : 'Heute'} · {formatTodayHeader()}
-      </p>
-      <h1 className="font-serif text-4xl text-bone leading-tight mb-2">
-        Hallo {firstName}
-      </h1>
-      <p className="text-sm text-bone-muted leading-relaxed mb-10">
-        {isAdmin
-          ? 'Übersicht über alle Kunden im System.'
-          : 'Schön dich wiederzusehen. Hier ist deine Übersicht.'}
-      </p>
+    <div className="space-y-8">
+      <section className="relative overflow-hidden rounded-[2rem] border border-white/[0.08] bg-gradient-to-br from-white/[0.08] via-white/[0.03] to-gold/[0.07] p-6 sm:p-8 shadow-2xl shadow-black/20">
+        <div className="absolute -right-24 -top-24 h-56 w-56 rounded-full bg-gold/10 blur-3xl" />
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="mb-3 text-[10px] font-medium uppercase tracking-caps text-gold">
+              {isAdmin ? 'Admin · Übersicht' : 'Heute'} · {formatTodayHeader()}
+            </p>
+            <h1 className="font-serif text-4xl leading-tight text-bone sm:text-5xl">
+              Hallo {firstName}
+            </h1>
+            <p className="mt-4 max-w-xl text-sm leading-relaxed text-bone-muted">
+              {isAdmin
+                ? 'Alle Kunden im Blick: Aktivität, Trainingssignale und offene Aufmerksamkeitspunkte.'
+                : 'Dein kompaktes Cockpit für Kunden, Aktivität und nächste Prioritäten.'}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="rounded-full border border-white/[0.08] bg-black/20 px-4 py-2 text-[10px] font-medium uppercase tracking-caps text-bone-muted">
+              {isAdmin ? 'Adminmodus' : 'Coachmodus'}
+            </span>
+            <Link
+              href="/coach/customers"
+              className="rounded-full border border-gold/30 bg-gold/10 px-4 py-2 text-[10px] font-medium uppercase tracking-caps text-gold transition hover:border-gold/60 hover:bg-gold/15"
+            >
+              Kunden öffnen →
+            </Link>
+          </div>
+        </div>
+      </section>
 
-      {/* === STAT-CARDS === */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-12">
-        <StatCard label="Aktive Kunden" value={activeCount} />
-        <StatCard label="Heute aktiv" value={activeTodayCount} accent={activeTodayCount > 0 ? 'gold' : undefined} />
-        <StatCard label="Meal-Plan heute" value={mealPlanTodayCount} accent={mealPlanTodayCount > 0 ? 'gold' : undefined} />
-        <StatCard label="Workouts · 7 Tage" value={workoutsWeekCount} />
-        <StatCard label="Inaktiv" value={inactiveCount} accent={inactiveCount > 0 ? 'red' : undefined} />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <StatCard label="Aktive Kunden" value={activeCount} hint="im Coaching" />
+        <StatCard
+          label="Heute aktiv"
+          value={activeTodayCount}
+          hint={`${Math.round((activeTodayCount / Math.max(activeCount, 1)) * 100)}% Aktivitätsquote`}
+          accent={activeTodayCount > 0 ? 'gold' : undefined}
+        />
+        <StatCard
+          label="Meal-Plan heute"
+          value={mealPlanTodayCount}
+          hint="veröffentlicht"
+          accent={mealPlanTodayCount > 0 ? 'gold' : undefined}
+        />
+        <StatCard label="Workouts" value={workoutsWeekCount} hint="letzte 7 Tage" />
+        <StatCard
+          label="Aufmerksamkeit"
+          value={inactiveCount}
+          hint="≥3 Tage inaktiv"
+          accent={inactiveCount > 0 ? 'red' : undefined}
+        />
       </div>
 
-      {/* === HEUTE AKTIV === */}
-      <section className="mb-12">
-        <p className="text-[10px] tracking-caps uppercase text-gold font-medium mb-5">
-          Heute aktiv {activeTodayCount > 0 && `(${activeTodayCount})`}
-        </p>
+      <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+        <DashboardPanel
+          title="Brauchen Aufmerksamkeit"
+          meta={
+            inactive.length > 0
+              ? `${inactive.length} ${inactive.length === 1 ? 'Kunde' : 'Kunden'}`
+              : 'Alles ruhig'
+          }
+          accent={inactive.length > 0 ? 'red' : 'gold'}
+        >
+          {inactive.length === 0 ? (
+            <EmptyPanelText>Keine Kunden sind seit 3+ Tagen inaktiv.</EmptyPanelText>
+          ) : (
+            <div className="space-y-2">
+              {inactive.map((s) => (
+                <InactiveRow key={s.customer.id} summary={s} />
+              ))}
+            </div>
+          )}
+        </DashboardPanel>
+
+        <DashboardPanel
+          title="Letzte Aktivität"
+          meta="7 Tage"
+          action={
+            <Link
+              href="/coach/customers"
+              className="text-[10px] font-medium uppercase tracking-caps text-bone-faint transition hover:text-gold"
+            >
+              alle anzeigen →
+            </Link>
+          }
+        >
+          {streamItems.length === 0 ? (
+            <EmptyPanelText>Noch keine Aktivität in den letzten 7 Tagen.</EmptyPanelText>
+          ) : (
+            <div className="space-y-3">
+              {streamItems.map((item) => (
+                <StreamRow key={item.id} item={item} />
+              ))}
+            </div>
+          )}
+        </DashboardPanel>
+      </div>
+
+      <DashboardPanel
+        title="Heute aktiv"
+        meta={`${activeTodayCount} von ${activeCount}`}
+        action={
+          <Link
+            href="/coach/customers"
+            className="text-[10px] font-medium uppercase tracking-caps text-bone-faint transition hover:text-gold"
+          >
+            Kundenliste →
+          </Link>
+        }
+      >
         {activeToday.length === 0 ? (
-          <p className="text-sm text-bone-faint italic">
-            Noch keine Aktivität heute.
-          </p>
+          <EmptyPanelText>Noch keine Aktivität heute.</EmptyPanelText>
         ) : (
-          <div className="space-y-1">
+          <div className="grid gap-2">
             {activeToday.map((s) => (
               <CustomerTodayRow key={s.customer.id} summary={s} />
             ))}
           </div>
         )}
-      </section>
-
-      {/* === BRAUCHEN AUFMERKSAMKEIT === */}
-      {inactive.length > 0 && (
-        <section className="mb-12">
-          <p className="text-[10px] tracking-caps uppercase text-red-400/80 font-medium mb-5">
-            Brauchen Aufmerksamkeit · {inactive.length} {inactive.length === 1 ? 'Kunde' : 'Kunden'} ≥3 Tage inaktiv
-          </p>
-          <div className="space-y-1">
-            {inactive.map((s) => (
-              <InactiveRow key={s.customer.id} summary={s} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* === GLOBALE AKTIVITÄT === */}
-      <section className="mb-12">
-        <div className="flex items-baseline justify-between mb-5">
-          <p className="text-[10px] tracking-caps uppercase text-gold font-medium">
-            Letzte Aktivität · alle Kunden
-          </p>
-          <Link
-            href="/coach/customers"
-            className="text-[10px] uppercase tracking-caps text-bone-faint hover:text-gold transition font-medium"
-          >
-            → alle anzeigen
-          </Link>
-        </div>
-        {streamItems.length === 0 ? (
-          <p className="text-sm text-bone-faint italic">
-            Noch keine Aktivität in den letzten 7 Tagen.
-          </p>
-        ) : (
-          <div className="space-y-5">
-            {streamItems.map((item) => (
-              <StreamRow key={item.id} item={item} />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Quick-link */}
-      <div className="border-t border-white/[0.08] pt-6">
-        <Link
-          href="/coach/customers"
-          className="text-[11px] uppercase tracking-caps text-bone-faint hover:text-bone-muted transition font-medium"
-        >
-          → Alle Kunden anzeigen
-        </Link>
-      </div>
+      </DashboardPanel>
 
       {!coach && (
-        <div className="mt-8 border border-red-400/40 bg-red-400/[0.04] px-5 py-4 text-sm text-red-300">
+        <div className="rounded-2xl border border-red-400/40 bg-red-400/[0.06] px-5 py-4 text-sm text-red-200">
           Hinweis: Dein Auth-Account ist nicht mit einem Coach-Eintrag verknüpft.
         </div>
       )}
@@ -479,37 +512,86 @@ export default async function CoachDashboardPage() {
   );
 }
 
-// === Stat-Card ===
-function StatCard({
-  label,
-  value,
-  accent,
+function DashboardPanel({
+  title,
+  meta,
+  accent = 'gold',
+  action,
+  children,
 }: {
-  label: string;
-  value: number;
+  title: string;
+  meta?: string;
   accent?: 'gold' | 'red';
+  action?: ReactNode;
+  children: ReactNode;
 }) {
-  const borderClass =
-    accent === 'gold'
-      ? 'border-gold/40'
-      : accent === 'red'
-      ? 'border-red-400/40'
-      : 'border-white/[0.08]';
-  const valueClass =
-    accent === 'gold' ? 'text-gold' : accent === 'red' ? 'text-red-400' : 'text-bone';
+  const accentClass = accent === 'red' ? 'bg-red-400/70' : 'bg-gold';
+  const metaClass = accent === 'red' ? 'text-red-300' : 'text-gold';
+
   return (
-    <div className={`border ${borderClass} px-5 py-5 bg-black/20`}>
-      <p className="text-[9px] tracking-caps uppercase text-bone-faint font-medium mb-2">
-        {label}
-      </p>
-      <p className={`font-serif text-3xl tabular-nums ${valueClass}`}>
-        {value}
-      </p>
+    <section className="rounded-3xl border border-white/[0.08] bg-black/20 p-4 shadow-xl shadow-black/10 sm:p-5">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="mb-2 flex items-center gap-2">
+            <span className={`h-1.5 w-1.5 rounded-full ${accentClass}`} />
+            <p className="text-[10px] font-medium uppercase tracking-caps text-bone-faint">
+              {title}
+            </p>
+          </div>
+          {meta && (
+            <p className={`text-xs font-medium uppercase tracking-capsTight ${metaClass}`}>
+              {meta}
+            </p>
+          )}
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function EmptyPanelText({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] px-4 py-6 text-sm italic text-bone-faint">
+      {children}
     </div>
   );
 }
 
-// === Customer-Today-Row (Heute aktiv) ===
+function StatCard({
+  label,
+  value,
+  hint,
+  accent,
+}: {
+  label: string;
+  value: number;
+  hint: string;
+  accent?: 'gold' | 'red';
+}) {
+  const borderClass =
+    accent === 'gold'
+      ? 'border-gold/30'
+      : accent === 'red'
+      ? 'border-red-400/35'
+      : 'border-white/[0.08]';
+  const valueClass =
+    accent === 'gold' ? 'text-gold' : accent === 'red' ? 'text-red-400' : 'text-bone';
+
+  return (
+    <div className={`rounded-2xl border ${borderClass} bg-white/[0.035] px-4 py-4 transition hover:bg-white/[0.055]`}>
+      <p className="mb-3 text-[9px] font-medium uppercase tracking-caps text-bone-faint">
+        {label}
+      </p>
+      <p className={`font-serif text-3xl tabular-nums leading-none ${valueClass}`}>
+        {value}
+      </p>
+      <p className="mt-3 text-[11px] text-bone-faint">{hint}</p>
+    </div>
+  );
+}
+
 function CustomerTodayRow({ summary: s }: { summary: CustomerSummary }) {
   const name =
     s.customer.first_name ?? s.customer.telegram_username ?? 'Kunde';
@@ -520,35 +602,63 @@ function CustomerTodayRow({ summary: s }: { summary: CustomerSummary }) {
   return (
     <Link
       href={`/coach/customers/${s.customer.id}`}
-      className="flex items-center gap-4 px-4 py-3 border-b border-white/[0.04] hover:bg-white/[0.02] transition group"
+      className="group grid gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.025] px-4 py-4 transition hover:border-gold/25 hover:bg-white/[0.045] sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
     >
-      <span className="text-sm text-bone font-medium w-32 truncate">
-        {name}
-      </span>
-      <span className="flex gap-1.5 text-base">
-        <span className={s.hasWorkoutToday ? 'opacity-100' : 'opacity-15'}>💪</span>
-        <span className={s.hasMealToday ? 'opacity-100' : 'opacity-15'}>🍽</span>
-        <span className={s.hasMessageToday ? 'opacity-100' : 'opacity-15'}>💬</span>
-      </span>
-      <span className="text-[11px] uppercase tracking-caps text-bone-faint flex-1 truncate">
-        {s.hasPublishedPlanToday && (
-          <span className="text-gold/80">Plan ✓ · </span>
-        )}
-        {s.hasMealToday ? (
-          <span className="tabular-nums">{kcalText}</span>
-        ) : (
-          <span className="italic">Keine Mahlzeit geloggt</span>
-        )}
-      </span>
-      <span className="text-[11px] text-bone-faint tabular-nums whitespace-nowrap">
-        {s.lastTodayIso && formatTime(s.lastTodayIso)}
-      </span>
-      <span className="text-bone-faint group-hover:text-gold transition">→</span>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="truncate text-sm font-medium text-bone">{name}</p>
+          {s.hasPublishedPlanToday && (
+            <span className="rounded-full border border-gold/25 bg-gold/10 px-2 py-0.5 text-[9px] font-medium uppercase tracking-capsTight text-gold">
+              Plan
+            </span>
+          )}
+        </div>
+        <p className="mt-1 truncate text-[11px] text-bone-faint">
+          {s.hasMealToday ? (
+            <span className="tabular-nums">{kcalText}</span>
+          ) : (
+            <span className="italic">Keine Mahlzeit geloggt</span>
+          )}
+        </p>
+      </div>
+      <div className="flex gap-1.5 text-sm">
+        <ActivityPill active={s.hasWorkoutToday} label="Workout" icon="💪" />
+        <ActivityPill active={s.hasMealToday} label="Meal" icon="🍽" />
+        <ActivityPill active={s.hasMessageToday} label="Chat" icon="💬" />
+      </div>
+      <div className="flex items-center justify-between gap-3 sm:justify-end">
+        <span className="text-[11px] text-bone-faint tabular-nums whitespace-nowrap">
+          {s.lastTodayIso ? formatTime(s.lastTodayIso) : '—'}
+        </span>
+        <span className="text-bone-faint transition group-hover:text-gold">→</span>
+      </div>
     </Link>
   );
 }
 
-// === Inactive-Row ===
+function ActivityPill({
+  active,
+  label,
+  icon,
+}: {
+  active: boolean;
+  label: string;
+  icon: string;
+}) {
+  return (
+    <span
+      title={label}
+      className={`rounded-full border px-2.5 py-1 transition ${
+        active
+          ? 'border-gold/25 bg-gold/10 text-bone'
+          : 'border-white/[0.06] bg-black/10 text-bone-faint opacity-50'
+      }`}
+    >
+      {icon}
+    </span>
+  );
+}
+
 function InactiveRow({ summary: s }: { summary: CustomerSummary }) {
   const name =
     s.customer.first_name ?? s.customer.telegram_username ?? 'Kunde';
@@ -561,20 +671,20 @@ function InactiveRow({ summary: s }: { summary: CustomerSummary }) {
   return (
     <Link
       href={`/coach/customers/${s.customer.id}`}
-      className="flex items-center gap-4 px-4 py-3 border-b border-white/[0.04] hover:bg-white/[0.02] transition group"
+      className="group flex items-center gap-3 rounded-2xl border border-red-400/15 bg-red-400/[0.035] px-4 py-3 transition hover:border-red-400/30 hover:bg-red-400/[0.055]"
     >
-      <span className="text-sm text-bone font-medium w-40 truncate">
-        {name}
-      </span>
-      <span className="text-[11px] uppercase tracking-caps text-red-400/70 italic flex-1">
-        {label}
-      </span>
-      <span className="text-bone-faint group-hover:text-gold transition">→</span>
+      <span className="h-2 w-2 rounded-full bg-red-400/80 shadow-[0_0_20px_rgba(248,113,113,0.35)]" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-bone">{name}</p>
+        <p className="mt-0.5 truncate text-[11px] uppercase tracking-capsTight text-red-300/80">
+          {label}
+        </p>
+      </div>
+      <span className="text-bone-faint transition group-hover:text-gold">→</span>
     </Link>
   );
 }
 
-// === Global-Stream-Row ===
 function StreamRow({ item }: { item: StreamItem }) {
   const icon =
     item.kind === 'workout' ? '💪' : item.kind === 'meal' ? '🍽' : '💬';
@@ -587,9 +697,11 @@ function StreamRow({ item }: { item: StreamItem }) {
   return (
     <Link
       href={`/coach/customers/${item.customerId}`}
-      className="flex gap-3 items-start group hover:bg-white/[0.02] -mx-2 px-2 py-1 transition"
+      className="group flex gap-3 rounded-2xl border border-white/[0.05] bg-white/[0.02] px-3 py-3 transition hover:border-gold/20 hover:bg-white/[0.04]"
     >
-      <span className="text-base mt-0.5">{icon}</span>
+      <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/[0.08] bg-black/20 text-base">
+        {icon}
+      </span>
       <div className="flex-1 min-w-0">
         <p className="text-sm text-bone leading-relaxed">
           <span className="font-medium">{item.customerName}</span>
@@ -608,7 +720,6 @@ function StreamRow({ item }: { item: StreamItem }) {
   );
 }
 
-// === EmptyState ===
 function EmptyState({
   firstName,
   isAdmin,
@@ -619,18 +730,18 @@ function EmptyState({
   hasCoach: boolean;
 }) {
   return (
-    <div>
-      <p className="text-[10px] tracking-caps uppercase text-gold font-medium mb-3">
+    <div className="rounded-[2rem] border border-white/[0.08] bg-white/[0.035] p-8">
+      <p className="mb-3 text-[10px] font-medium uppercase tracking-caps text-gold">
         {isAdmin ? 'Admin · Übersicht' : 'Heute'}
       </p>
-      <h1 className="font-serif text-4xl text-bone leading-tight mb-2">
+      <h1 className="font-serif text-4xl leading-tight text-bone">
         Hallo {firstName}
       </h1>
-      <p className="text-sm text-bone-muted leading-relaxed mb-10">
+      <p className="mt-3 text-sm leading-relaxed text-bone-muted">
         Aktuell hast du keine aktiven Kunden.
       </p>
       {!hasCoach && (
-        <div className="border border-red-400/40 bg-red-400/[0.04] px-5 py-4 text-sm text-red-300">
+        <div className="mt-8 rounded-2xl border border-red-400/40 bg-red-400/[0.06] px-5 py-4 text-sm text-red-200">
           Hinweis: Dein Auth-Account ist nicht mit einem Coach-Eintrag verknüpft.
         </div>
       )}
