@@ -350,7 +350,7 @@ export default async function CoachDashboardPage() {
     }),
     ...(streamMessagesRes.data ?? []).map((m): StreamItem => {
       const c = customerMap.get(m.customer_id);
-      const isOutbound = m.direction === 'outbound' || m.direction === 'out';
+      const isOutbound = m.direction === 'out';
       return {
         id: `msg-${m.id}`,
         kind: 'message',
