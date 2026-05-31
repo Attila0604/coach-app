@@ -401,14 +401,14 @@ REGELN:
    - Allgemein (general): Mix aus Kraft + Hypertrophie, 3 Sätze, 8-12 Reps
 6. weight_type: "kg" (klassisches Gewichtstraining), "body" (Bodyweight), "band" (Widerstandsband). Wähle den passenden Typ pro Übung.
 7. weight_kg: lass NULL — der Coach kennt den Kunden und setzt das Gewicht selbst
-8. notes: optionale kurze Anweisung wie "langsame Exzentrik" oder "Range of Motion priorisieren"
+8. notes: kurze, verständliche Erklärung für Coach/Kunde: Zweck oder Technik-Cue, z.B. "Rücken stabil halten, kontrolliert ablassen" oder "Pumpe im Zielmuskel, nicht maximal schwer"
 9. Tag-Titel: prägnant wie "Push", "Pull", "Legs", "Oberkörper", "Ganzkörper A"
 10. Tag-Untertitel: Muskelgruppen, z.B. "Brust, Schulter, Trizeps"
 11. summary ist NUR FÜR DEN COACH — kurze professionelle Notiz zum Plan
 
 ANTWORTE NUR VALID JSON, KOMPAKT, OHNE MARKDOWN, OHNE VORTEXT:
 
-{"plan":{"name":"...","weeks":4},"days":[{"day_number":1,"title":"Push","subtitle":"Brust, Schulter, Trizeps","exercises":[{"name":"Bankdrücken","sets":4,"reps_min":6,"reps_max":8,"weight_type":"kg","rest_seconds":120,"notes":"Aufwärmen 2 Sätze"}]}],"summary":"..."}
+{"plan":{"name":"...","weeks":4},"days":[{"day_number":1,"title":"Push","subtitle":"Brust, Schulter, Trizeps","exercises":[{"name":"Bankdrücken","sets":4,"reps_min":6,"reps_max":8,"weight_type":"kg","rest_seconds":120,"notes":"Schulterblätter aktiv zurückziehen, kontrolliert ablassen"}]}],"summary":"..."}
 
 Genau daysPerWeek Einträge in days[]. day_number läuft von 1 bis daysPerWeek.`;
 
