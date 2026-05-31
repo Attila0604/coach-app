@@ -93,7 +93,7 @@ export default function TrainingPlanHeader({
   const statsLine = statsParts.join(' · ');
 
   return (
-    <div className="bg-ink-900 px-7 py-6">
+    <div className="rounded-3xl border border-white/[0.08] bg-black/20 px-5 py-5 sm:px-7 sm:py-6">
       <div className="flex items-start justify-between gap-4 mb-2 flex-wrap">
         <h2 className="font-serif text-2xl text-bone leading-tight">
           {planName}

@@ -394,7 +394,7 @@ export function WeeklyMealPlanEditor({ customerId, plans, targets }: Props) {
   if (plans.length === 0) return null;
 
   return (
-    <div className="bg-ink-900 p-7">
+    <div className="rounded-3xl border border-white/[0.08] bg-black/20 p-5 sm:p-7">
       {/* Header */}
       <div className="flex items-baseline justify-between gap-4 flex-wrap mb-2">
         <div>
@@ -695,7 +695,7 @@ function MealEditor({
   disabled?: boolean;
 }) {
   return (
-    <div className="border border-white/[0.06] p-4">
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.025] p-4">
       <div className="flex items-center gap-3 mb-3 flex-wrap">
         <span className="text-base">
           {MEAL_TYPE_EMOJIS[meal.meal_type] || "🍽️"}

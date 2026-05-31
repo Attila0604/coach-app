@@ -64,7 +64,7 @@ function textToArr(text: string): string[] {
 }
 
 const inputCls =
-  'w-full bg-black border border-white/[0.12] px-3 py-2 text-sm text-bone placeholder:text-bone-faint focus:outline-none focus:border-gold/50 transition disabled:opacity-50';
+  'w-full rounded-xl border border-white/[0.1] bg-white/[0.035] px-3 py-2.5 text-sm text-bone placeholder:text-bone-faint transition focus:border-gold/45 focus:bg-white/[0.055] focus:outline-none disabled:opacity-50';
 
 export function ProfileEditor({
   customerId,

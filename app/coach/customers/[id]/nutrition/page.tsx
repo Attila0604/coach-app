@@ -70,16 +70,25 @@ export default async function CustomerNutritionPage({
     customer.first_name || customer.telegram_username || 'Kunde';
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
+    <div className="space-y-8">
       <CustomerHeader
         customerId={params.id}
         displayName={displayName}
         status={customer.status}
       />
 
-      <p className="text-[10px] tracking-caps uppercase text-gold font-medium mb-6">
-        Ernährung bearbeiten
-      </p>
+      <div className="rounded-3xl border border-white/[0.08] bg-white/[0.03] p-5 sm:p-6">
+        <p className="mb-3 text-[10px] font-medium uppercase tracking-caps text-gold">
+          Ernährung bearbeiten
+        </p>
+        <h2 className="font-serif text-3xl leading-tight text-bone">
+          Food-Library & Wochenplan
+        </h2>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-bone-muted">
+          Lebensmittel, KI-Settings und Entwürfe bleiben in einem ruhigen
+          Workflow zusammen.
+        </p>
+      </div>
 
       <div className="space-y-8">
         <NutritionSetup

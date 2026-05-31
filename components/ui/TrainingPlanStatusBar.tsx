@@ -56,7 +56,7 @@ export default function TrainingPlanStatusBar({
   const isPaused = status === 'paused';
 
   return (
-    <div className="bg-ink-900 px-7 py-5 flex items-center justify-between gap-4 flex-wrap">
+    <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-white/[0.08] bg-black/20 px-5 py-5 sm:px-7">
       <div className="flex items-center gap-3 flex-wrap">
         <StatusPill status={status} />
         <p className="text-sm text-bone-muted">

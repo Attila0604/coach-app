@@ -84,7 +84,7 @@ function timeAgoDe(iso: string): string {
 
 export function MealPlanDisplay({ plan, targets }: Props) {
   return (
-    <div className="bg-ink-900 p-7">
+    <div className="rounded-3xl border border-white/[0.08] bg-black/20 p-5 sm:p-7">
       <div className="flex items-baseline justify-between gap-3 flex-wrap mb-1">
         <h3 className="text-[9px] tracking-caps uppercase text-bone-muted font-medium">
           Aktueller Ernährungsplan

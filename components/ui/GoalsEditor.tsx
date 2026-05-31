@@ -198,7 +198,7 @@ function ViewCell({
   value: number | null | undefined;
 }) {
   return (
-    <div className="bg-ink-900 px-3 py-4 text-center">
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.025] px-3 py-4 text-center">
       <p className="font-serif text-2xl text-bone tabular-nums leading-none">
         {value ?? "—"}
         {value != null && (
@@ -226,7 +226,7 @@ function EditCell({
   disabled: boolean;
 }) {
   return (
-    <div className="bg-ink-900 px-3 py-4 text-center">
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.025] px-3 py-4 text-center">
       <input
         type="number"
         inputMode="numeric"

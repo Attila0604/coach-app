@@ -199,8 +199,7 @@ export default async function CustomerOverviewPage({
       };
     }),
     ...(recentMessagesRes.data ?? []).map((m): RecentItem => {
-      const isOutbound =
-        m.direction === 'outbound' || m.direction === 'out';
+      const isOutbound = m.direction === 'out';
       return {
         id: `msg-${m.id}`,
         kind: 'message',
@@ -230,58 +229,52 @@ export default async function CustomerOverviewPage({
   );
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
+    <div className="space-y-8">
       <Link
         href="/coach/customers"
-        className="text-[11px] uppercase tracking-caps text-bone-faint hover:text-bone-muted transition mb-8 inline-flex items-center gap-2"
+        className="inline-flex items-center gap-2 text-[11px] uppercase tracking-caps text-bone-faint transition hover:text-gold"
       >
         ← Kunden
       </Link>
 
-      {/* === HEADER === */}
-      <header className="mb-10 flex items-start justify-between gap-6 flex-wrap">
-        <div>
-          <h1 className="font-serif text-4xl text-bone leading-tight mb-2">
-            {displayName}
-          </h1>
-          <p className="text-sm text-bone-muted">
-            {username && <>{username} · </>}
-            {onboardedDate && <>seit {onboardedDate}</>}
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-2 text-right">
-          <span className="text-[10px] uppercase tracking-caps text-gold font-medium px-3 py-1.5 border border-gold/40">
-            {statusLabel}
-          </span>
-          {lastActivityIso && (
-            <span className="text-[11px] text-bone-faint">
-              letzte Aktivität: {formatRelative(lastActivityIso)}
+      <section className="overflow-hidden rounded-[2rem] border border-white/[0.08] bg-gradient-to-br from-white/[0.08] via-white/[0.03] to-gold/[0.06] p-6 sm:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-6">
+          <div>
+            <p className="mb-3 text-[10px] font-medium uppercase tracking-caps text-gold">
+              Kundenprofil
+            </p>
+            <h1 className="font-serif text-4xl leading-tight text-bone sm:text-5xl">
+              {displayName}
+            </h1>
+            <p className="mt-3 text-sm text-bone-muted">
+              {username && <>{username} · </>}
+              {onboardedDate ? <>seit {onboardedDate}</> : 'Noch kein Startdatum'}
+            </p>
+          </div>
+          <div className="flex flex-col items-start gap-2 sm:items-end">
+            <span className="rounded-full border border-gold/30 bg-gold/10 px-3 py-1.5 text-[10px] font-medium uppercase tracking-caps text-gold">
+              {statusLabel}
             </span>
-          )}
+            {lastActivityIso && (
+              <span className="text-[11px] text-bone-faint">
+                letzte Aktivität: {formatRelative(lastActivityIso)}
+              </span>
+            )}
+          </div>
         </div>
-      </header>
+      </section>
 
-      {/* === HEUTE (3 Cards) === */}
-      <section className="mb-12">
-        <p className="text-[10px] tracking-caps uppercase text-gold font-medium mb-5">
+      <section>
+        <p className="mb-4 text-[10px] font-medium uppercase tracking-caps text-gold">
           Heute · {formatTodayHeader()}
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* KCAL */}
-          <div className="border border-white/[0.08] px-5 py-5 bg-black/20">
-            <p className="text-[9px] tracking-caps uppercase text-bone-faint font-medium mb-2">
-              Kalorien
-            </p>
-            <p className="font-serif text-3xl tabular-nums text-bone">
-              {todayKcal}
-              {kcalTarget && (
-                <span className="text-base text-bone-faint">
-                  {' '}/ {kcalTarget}
-                </span>
-              )}
-            </p>
-            <p className="text-[11px] text-bone-faint mt-1 tabular-nums">
-              {todayFood.length === 0
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <TodayCard
+            label="Kalorien"
+            value={todayKcal}
+            suffix={kcalTarget ? `/ ${kcalTarget}` : undefined}
+            meta={
+              todayFood.length === 0
                 ? 'keine Mahlzeit'
                 : kcalPercent != null
                 ? `${kcalPercent}% des Ziels · ${todayFood.length} ${
@@ -289,164 +282,196 @@ export default async function CustomerOverviewPage({
                   }`
                 : `${todayFood.length} ${
                     todayFood.length === 1 ? 'Mahlzeit' : 'Mahlzeiten'
-                  }`}
-            </p>
-          </div>
-
-          {/* WORKOUT */}
-          <div className="border border-white/[0.08] px-5 py-5 bg-black/20">
-            <p className="text-[9px] tracking-caps uppercase text-bone-faint font-medium mb-2">
-              Workout
-            </p>
-            {lastWorkout ? (
-              <>
-                <p className="font-serif text-3xl tabular-nums text-bone">💪</p>
-                <p className="text-[11px] text-bone-faint mt-1">
-                  {lastWorkout.training_days
-                    ? `Tag ${lastWorkout.training_days.day_number} · ${
-                        lastWorkout.status === 'completed'
-                          ? 'abgeschlossen'
-                          : lastWorkout.status === 'aborted'
-                          ? 'abgebrochen'
-                          : 'läuft'
-                      }`
-                    : lastWorkout.status}
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="font-serif text-3xl tabular-nums text-bone-faint">
-                  —
-                </p>
-                <p className="text-[11px] text-bone-faint mt-1 italic">
-                  heute keins
-                </p>
-              </>
-            )}
-          </div>
-
-          {/* PLAN */}
-          <div
-            className={`border ${
-              todayPlan ? 'border-gold/40' : 'border-white/[0.08]'
-            } px-5 py-5 bg-black/20`}
-          >
-            <p className="text-[9px] tracking-caps uppercase text-bone-faint font-medium mb-2">
-              Meal-Plan
-            </p>
-            {todayPlan ? (
-              <>
-                <p className="font-serif text-3xl tabular-nums text-gold">
-                  ✓
-                </p>
-                <p className="text-[11px] text-bone-faint mt-1 tabular-nums">
-                  {todayPlan.total_kcal != null
-                    ? `${todayPlan.total_kcal} kcal geplant`
-                    : 'aktiv für heute'}
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="font-serif text-3xl tabular-nums text-bone-faint">
-                  —
-                </p>
-                <p className="text-[11px] text-bone-faint mt-1 italic">
-                  kein Plan
-                </p>
-              </>
-            )}
-          </div>
+                  }`
+            }
+          />
+          <TodayCard
+            label="Workout"
+            value={lastWorkout ? '💪' : '—'}
+            meta={
+              lastWorkout?.training_days
+                ? `Tag ${lastWorkout.training_days.day_number} · ${
+                    lastWorkout.status === 'completed'
+                      ? 'abgeschlossen'
+                      : lastWorkout.status === 'aborted'
+                      ? 'abgebrochen'
+                      : 'läuft'
+                  }`
+                : lastWorkout?.status ?? 'heute keins'
+            }
+            muted={!lastWorkout}
+          />
+          <TodayCard
+            label="Meal-Plan"
+            value={todayPlan ? '✓' : '—'}
+            meta={
+              todayPlan?.total_kcal != null
+                ? `${todayPlan.total_kcal} kcal geplant`
+                : todayPlan
+                ? 'aktiv für heute'
+                : 'kein Plan'
+            }
+            accent={!!todayPlan}
+            muted={!todayPlan}
+          />
         </div>
       </section>
 
-      {/* === COACH-NOTIZ === */}
-      <section className="mb-12">
-        <div className="flex items-baseline justify-between mb-3">
-          <p className="text-[10px] tracking-caps uppercase text-gold font-medium">
-            Coach-Notiz
-          </p>
-          <Link
-            href={`/coach/customers/${params.id}/profile`}
-            className="text-[10px] uppercase tracking-caps text-bone-faint hover:text-gold transition font-medium"
-          >
-            → bearbeiten
-          </Link>
-        </div>
-        {coachNote ? (
-          <p className="font-serif text-xl text-bone-muted leading-relaxed italic">
-            &ldquo;{coachNote.content}&rdquo;
-          </p>
-        ) : (
-          <p className="text-sm text-bone-faint italic">
-            Noch keine Notiz hinterlegt.
-          </p>
-        )}
-      </section>
+      <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+        <Panel
+          title="Coach-Notiz"
+          action={
+            <Link
+              href={`/coach/customers/${params.id}/profile`}
+              className="text-[10px] font-medium uppercase tracking-caps text-bone-faint transition hover:text-gold"
+            >
+              bearbeiten →
+            </Link>
+          }
+        >
+          {coachNote ? (
+            <p className="font-serif text-xl italic leading-relaxed text-bone-muted">
+              &ldquo;{coachNote.content}&rdquo;
+            </p>
+          ) : (
+            <EmptyText>Noch keine Notiz hinterlegt.</EmptyText>
+          )}
+        </Panel>
 
-      {/* === LETZTE AKTIVITÄT === */}
-      <section className="mb-12">
-        <div className="flex items-baseline justify-between mb-5">
-          <p className="text-[10px] tracking-caps uppercase text-gold font-medium">
-            Letzte Aktivität
-          </p>
-          <Link
-            href={`/coach/customers/${params.id}/activity`}
-            className="text-[10px] uppercase tracking-caps text-bone-faint hover:text-gold transition font-medium"
-          >
-            → alle anzeigen
-          </Link>
-        </div>
-        {recentItems.length === 0 ? (
-          <p className="text-sm text-bone-faint italic">
-            Noch keine Aktivität.
-          </p>
-        ) : (
-          <ul className="space-y-3">
-            {recentItems.map((item) => (
-              <li key={item.id} className="flex gap-3 items-baseline">
-                <span className="text-base">
-                  {item.kind === 'meal'
-                    ? '🍽'
-                    : item.kind === 'workout'
-                    ? '💪'
-                    : '💬'}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-bone leading-relaxed">
-                    {item.title}
-                  </p>
-                  {item.subtitle && (
-                    <p className="text-[11px] text-bone-muted italic mt-0.5 truncate">
-                      {item.subtitle}
-                    </p>
-                  )}
-                </div>
-                <span className="text-[11px] text-bone-faint tabular-nums whitespace-nowrap">
-                  {formatRelative(item.iso)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+        <Panel
+          title="Letzte Aktivität"
+          action={
+            <Link
+              href={`/coach/customers/${params.id}/activity`}
+              className="text-[10px] font-medium uppercase tracking-caps text-bone-faint transition hover:text-gold"
+            >
+              alle anzeigen →
+            </Link>
+          }
+        >
+          {recentItems.length === 0 ? (
+            <EmptyText>Noch keine Aktivität.</EmptyText>
+          ) : (
+            <div className="space-y-3">
+              {recentItems.map((item) => (
+                <RecentRow key={item.id} item={item} />
+              ))}
+            </div>
+          )}
+        </Panel>
+      </div>
 
-      {/* === NAV-CARDS === */}
-      <nav className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-12">
+      <nav className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {NAV_CARDS.map((card) => (
           <Link
             key={card.href}
             href={`/coach/customers/${params.id}/${card.href}`}
-            className="group block border border-white/[0.08] px-5 py-5 hover:border-gold/40 hover:bg-white/[0.02] transition"
+            className="group rounded-3xl border border-white/[0.08] bg-white/[0.025] px-5 py-5 transition hover:border-gold/35 hover:bg-gold/[0.06]"
           >
-            <p className="font-serif text-2xl text-bone leading-tight mb-2 group-hover:text-gold transition-colors">
+            <p className="mb-2 font-serif text-2xl leading-tight text-bone transition-colors group-hover:text-gold">
               {card.label} →
             </p>
-            <p className="text-[11px] text-bone-muted leading-relaxed">
+            <p className="text-[11px] leading-relaxed text-bone-muted">
               {card.subtitle}
             </p>
           </Link>
         ))}
       </nav>
+    </div>
+  );
+}
+
+function TodayCard({
+  label,
+  value,
+  suffix,
+  meta,
+  accent = false,
+  muted = false,
+}: {
+  label: string;
+  value: string | number;
+  suffix?: string;
+  meta: string;
+  accent?: boolean;
+  muted?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-2xl border px-5 py-5 ${
+        accent
+          ? 'border-gold/30 bg-gold/[0.07]'
+          : 'border-white/[0.08] bg-white/[0.035]'
+      }`}
+    >
+      <p className="mb-3 text-[9px] font-medium uppercase tracking-caps text-bone-faint">
+        {label}
+      </p>
+      <p
+        className={`font-serif text-3xl leading-none tabular-nums ${
+          accent ? 'text-gold' : muted ? 'text-bone-faint' : 'text-bone'
+        }`}
+      >
+        {value}
+        {suffix && (
+          <span className="ml-2 text-base text-bone-faint">{suffix}</span>
+        )}
+      </p>
+      <p className="mt-3 text-[11px] text-bone-faint">{meta}</p>
+    </div>
+  );
+}
+
+function Panel({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-3xl border border-white/[0.08] bg-black/20 p-5">
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <p className="text-[10px] font-medium uppercase tracking-caps text-gold">
+          {title}
+        </p>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function EmptyText({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] px-4 py-5 text-sm italic text-bone-faint">
+      {children}
+    </p>
+  );
+}
+
+function RecentRow({ item }: { item: RecentItem }) {
+  const icon =
+    item.kind === 'meal' ? '🍽' : item.kind === 'workout' ? '💪' : '💬';
+
+  return (
+    <div className="flex gap-3 rounded-2xl border border-white/[0.05] bg-white/[0.02] px-3 py-3">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/[0.08] bg-black/20 text-base">
+        {icon}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm leading-relaxed text-bone">{item.title}</p>
+        {item.subtitle && (
+          <p className="mt-0.5 truncate text-[11px] italic text-bone-muted">
+            {item.subtitle}
+          </p>
+        )}
+      </div>
+      <span className="mt-1 whitespace-nowrap text-[11px] tabular-nums text-bone-faint">
+        {formatRelative(item.iso)}
+      </span>
     </div>
   );
 }

@@ -178,7 +178,7 @@ export default function ActivityList({
 
   return (
     <>
-      <div className="flex gap-2 mb-10 flex-wrap">
+      <div className="mb-8 flex flex-wrap gap-2 rounded-3xl border border-white/[0.08] bg-black/20 p-3">
         <FilterPill
           active={filter === 'all'}
           onClick={() => setFilter('all')}
@@ -206,17 +206,17 @@ export default function ActivityList({
       </div>
 
       {filteredItems.length === 0 ? (
-        <p className="text-sm text-bone-muted italic">
+        <p className="rounded-3xl border border-dashed border-white/[0.1] bg-white/[0.025] p-8 text-sm italic text-bone-muted">
           Noch keine Aktivität in den letzten 30 Tagen.
         </p>
       ) : (
         <div className="space-y-10">
           {groupedByDay.map(([day, items]) => (
             <div key={day}>
-              <p className="text-[10px] tracking-caps uppercase text-bone-faint font-medium mb-4 pb-2 border-b border-white/[0.06]">
+              <p className="mb-4 border-b border-white/[0.06] pb-2 text-[10px] font-medium uppercase tracking-caps text-gold">
                 {formatDayLabel(day)}
               </p>
-              <div className="space-y-5">
+              <div className="space-y-3">
                 {items.map((item) => (
                   <ActivityItemRow
                     key={`${item.kind}-${item.id}`}
@@ -245,10 +245,10 @@ function FilterPill({
     <button
       type="button"
       onClick={onClick}
-      className={`text-[10px] uppercase tracking-caps font-medium px-4 py-2 border transition ${
+      className={`rounded-full border px-4 py-2 text-[10px] font-medium uppercase tracking-caps transition ${
         active
-          ? 'border-gold text-gold bg-gold/5'
-          : 'border-white/[0.12] text-bone-muted hover:border-white/[0.25] hover:text-bone'
+          ? 'border-gold/40 bg-gold/10 text-gold'
+          : 'border-white/[0.1] bg-white/[0.025] text-bone-muted hover:border-gold/25 hover:text-bone'
       }`}
     >
       {children}
@@ -264,15 +264,18 @@ function ActivityItemRow({ item }: { item: ActivityItem }) {
       meal.meal_type ??
       'Mahlzeit';
     return (
-      <div className="flex gap-4 items-start">
-        <div className="text-[10px] tracking-caps uppercase text-gold/80 font-medium w-24 shrink-0 pt-1">
-          🍽 {mealLabel}
+      <div className="flex gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.025] px-4 py-4">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-gold/20 bg-gold/10 text-base">
+          🍽
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-bone leading-relaxed">
+          <p className="text-[10px] font-medium uppercase tracking-capsTight text-gold">
+            {mealLabel}
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-bone">
             {meal.raw_description}
           </p>
-          <div className="flex flex-wrap gap-x-3 text-[11px] text-bone-faint mt-1 tabular-nums">
+          <div className="mt-2 flex flex-wrap gap-x-3 text-[11px] tabular-nums text-bone-faint">
             {meal.total_kcal != null && <span>{meal.total_kcal} kcal</span>}
             {meal.protein_g != null && (
               <span>P {Math.round(Number(meal.protein_g))}g</span>
@@ -285,7 +288,7 @@ function ActivityItemRow({ item }: { item: ActivityItem }) {
             )}
           </div>
         </div>
-        <div className="text-[11px] text-bone-faint tabular-nums shrink-0 pt-1">
+        <div className="shrink-0 pt-1 text-[11px] tabular-nums text-bone-faint">
           {formatTime(meal.logged_at)}
         </div>
       </div>
@@ -316,20 +319,23 @@ function ActivityItemRow({ item }: { item: ActivityItem }) {
         : 'text-bone-faint';
 
     return (
-      <div className="flex gap-4 items-start">
-        <div className={`text-[10px] tracking-caps uppercase font-medium w-24 shrink-0 pt-1 ${statusColor}`}>
-          💪 {statusLabel}
+      <div className="flex gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.025] px-4 py-4">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/[0.08] bg-black/20 text-base">
+          💪
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-bone leading-relaxed font-medium">
+          <p className={`text-[10px] font-medium uppercase tracking-capsTight ${statusColor}`}>
+            {statusLabel}
+          </p>
+          <p className="mt-1 text-sm font-medium leading-relaxed text-bone">
             {dayName}
           </p>
           {day?.subtitle && (
-            <p className="text-[11px] text-bone-muted italic mt-0.5">
+            <p className="mt-0.5 text-[11px] italic text-bone-muted">
               {day.subtitle}
             </p>
           )}
-          <div className="flex flex-wrap gap-x-3 text-[11px] text-bone-faint mt-1 tabular-nums">
+          <div className="mt-2 flex flex-wrap gap-x-3 text-[11px] tabular-nums text-bone-faint">
             <span>{formatDuration(w.total_duration_seconds)}</span>
             <span>{setsCount} {setsCount === 1 ? 'Satz' : 'Sätze'}</span>
             {totalVolume > 0 && (
@@ -337,7 +343,7 @@ function ActivityItemRow({ item }: { item: ActivityItem }) {
             )}
           </div>
         </div>
-        <div className="text-[11px] text-bone-faint tabular-nums shrink-0 pt-1">
+        <div className="shrink-0 pt-1 text-[11px] tabular-nums text-bone-faint">
           {formatTime(w.started_at)}
         </div>
       </div>
@@ -346,19 +352,21 @@ function ActivityItemRow({ item }: { item: ActivityItem }) {
 
   // Message
   const msg = item.data;
-  const isOutbound =
-    msg.direction === 'outbound' || msg.direction === 'out';
+  const isOutbound = msg.direction === 'out';
   return (
-    <div className="flex gap-4 items-start">
-      <div className="text-[10px] tracking-caps uppercase text-bone-faint font-medium w-24 shrink-0 pt-1">
-        💬 {isOutbound ? `${msg.agent_name ?? 'Bot'} →` : '← Kunde'}
+    <div className="flex gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.025] px-4 py-4">
+      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/[0.08] bg-black/20 text-base">
+        💬
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-bone-muted leading-relaxed whitespace-pre-wrap">
+        <p className="text-[10px] font-medium uppercase tracking-capsTight text-bone-faint">
+          {isOutbound ? `${msg.agent_name ?? 'Bot'} →` : '← Kunde'}
+        </p>
+        <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-bone-muted">
           {msg.content}
         </p>
       </div>
-      <div className="text-[11px] text-bone-faint tabular-nums shrink-0 pt-1">
+      <div className="shrink-0 pt-1 text-[11px] tabular-nums text-bone-faint">
         {formatTime(msg.created_at)}
       </div>
     </div>

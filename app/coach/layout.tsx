@@ -29,31 +29,43 @@ export default async function CoachLayout({
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-white/5 bg-ink-800/60 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link href="/coach" className="flex items-baseline gap-2">
-              <span className="font-serif text-lg text-white">Coach</span>
-              <span className="text-xs uppercase tracking-[0.18em] text-gold">Beta</span>
+      <header className="sticky top-0 z-10 border-b border-white/[0.06] bg-ink-900/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3 sm:px-6">
+          <div className="flex min-w-0 items-center gap-4 sm:gap-6">
+            <Link href="/coach" className="group flex items-center gap-3">
+              <span className="grid h-9 w-9 place-items-center rounded-2xl border border-gold/25 bg-gold/10 font-serif text-lg text-gold transition group-hover:border-gold/50">
+                C
+              </span>
+              <span className="hidden leading-none sm:block">
+                <span className="block font-serif text-lg text-bone">Coach</span>
+                <span className="block text-[9px] uppercase tracking-capsTight text-gold">
+                  Beta
+                </span>
+              </span>
             </Link>
-            <nav className="flex gap-5 text-sm">
-              <Link href="/coach" className="text-white/70 hover:text-white transition">
+            <nav className="flex rounded-full border border-white/[0.08] bg-white/[0.035] p-1 text-xs">
+              <Link
+                href="/coach"
+                className="rounded-full px-3 py-1.5 text-bone-muted transition hover:bg-white/[0.06] hover:text-bone"
+              >
                 Übersicht
               </Link>
               <Link
                 href="/coach/customers"
-                className="text-white/70 hover:text-white transition"
+                className="rounded-full px-3 py-1.5 text-bone-muted transition hover:bg-white/[0.06] hover:text-bone"
               >
                 Kunden
               </Link>
             </nav>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-white/60 hidden sm:inline">{displayName}</span>
+          <div className="flex items-center gap-3">
+            <span className="hidden max-w-40 truncate text-xs text-bone-muted sm:inline">
+              {displayName}
+            </span>
             <form action={logout}>
               <button
                 type="submit"
-                className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/85 hover:bg-white/10 transition"
+                className="rounded-full border border-white/[0.1] bg-white/[0.04] px-3 py-1.5 text-xs text-bone-muted transition hover:border-gold/25 hover:bg-gold/10 hover:text-gold"
               >
                 Abmelden
               </button>
@@ -62,7 +74,9 @@ export default async function CoachLayout({
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-10">{children}</main>
+      <main className="mx-auto max-w-6xl px-5 py-8 sm:px-6 sm:py-10">
+        {children}
+      </main>
     </div>
   );
 }
