@@ -257,7 +257,7 @@ export default function TrainingPlanEditor({ customerId, plan }: Props) {
             {plan.days.map((day) => (
               <div
                 key={day.id}
-                className="rounded-3xl border border-white/[0.08] bg-black/20 p-5"
+                className="border border-[#1F1E1A] rounded-xl p-5 bg-[#0E0D10]"
               >
                 <DayEditor
                   day={day}
@@ -735,6 +735,18 @@ function ExerciseEditForm({
         </span>
       </div>
 
+      <div className="mb-4 rounded-xl border border-[#D4AF6C]/20 bg-[#D4AF6C]/[0.06] px-3 py-3">
+        <p className="text-[11px] leading-relaxed text-[#8E8B83]">
+          <span className="font-medium text-[#D4AF6C]">Kurz erklärt:</span>{' '}
+          &ldquo;Sätze&rdquo; = Durchgänge, &ldquo;Wdh.&rdquo; = Wiederholungen pro
+          Satz, &ldquo;Pause&rdquo; = Erholung zwischen Sätzen. Bei Gewicht bedeutet
+          <span className="text-[#F5F2EA]"> kg</span> ein frei gesetztes
+          Arbeitsgewicht, <span className="text-[#F5F2EA]">Body</span>{' '}
+          Körpergewicht und <span className="text-[#F5F2EA]">Band</span>{' '}
+          Widerstandsband.
+        </p>
+      </div>
+
       <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-2">
         <EditCell label="Übung">
           <input
@@ -753,7 +765,7 @@ function ExerciseEditForm({
             className="w-full bg-[#0A0A0C] border border-[#2C2A24] rounded-md px-2.5 py-2 text-[13px] text-[#F5F2EA] tabular-nums focus:border-[#D4AF6C] focus:outline-none"
           />
         </EditCell>
-        <EditCell label="Reps min">
+        <EditCell label="Wdh. von">
           <input
             type="number"
             value={repsMin}
@@ -762,7 +774,7 @@ function ExerciseEditForm({
             className="w-full bg-[#0A0A0C] border border-[#2C2A24] rounded-md px-2.5 py-2 text-[13px] text-[#F5F2EA] tabular-nums focus:border-[#D4AF6C] focus:outline-none"
           />
         </EditCell>
-        <EditCell label="Reps max">
+        <EditCell label="Wdh. bis">
           <input
             type="number"
             value={repsMax}
@@ -772,7 +784,7 @@ function ExerciseEditForm({
             className="w-full bg-[#0A0A0C] border border-[#2C2A24] rounded-md px-2.5 py-2 text-[13px] text-[#F5F2EA] tabular-nums focus:border-[#D4AF6C] focus:outline-none"
           />
         </EditCell>
-        <EditCell label="Pause (s)">
+        <EditCell label="Pause (Sek.)">
           <input
             type="number"
             value={restSeconds}

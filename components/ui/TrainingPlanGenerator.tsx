@@ -64,10 +64,21 @@ export default function TrainingPlanGenerator({
   }
 
   return (
-    <div className="rounded-3xl border border-white/[0.08] bg-black/20 p-5 sm:p-7">
+    <div className="bg-ink-900 p-7">
       <h3 className="text-[9px] tracking-caps uppercase text-bone-muted font-medium mb-5">
         KI-Trainingsplan
       </h3>
+
+      <div className="mb-5 rounded-2xl border border-gold/20 bg-gold/[0.05] px-4 py-4">
+        <p className="text-[10px] font-medium uppercase tracking-capsTight text-gold">
+          So liest du den KI-Plan
+        </p>
+        <p className="mt-2 text-[12px] leading-relaxed text-bone-muted">
+          Die KI liefert Startwerte: <span className="text-bone">Sätze × Wiederholungen</span>,
+          empfohlene Pause, Gewichtstyp und kurze Technik-Hinweise. Konkrete kg-Werte bleiben
+          meistens offen, damit du sie passend zum Kunden festlegst.
+        </p>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
         <div className="flex flex-col gap-2">
