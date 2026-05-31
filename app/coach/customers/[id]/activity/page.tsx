@@ -54,16 +54,24 @@ export default async function CustomerActivityPage({
     customer.first_name || customer.telegram_username || 'Kunde';
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-10">
+    <div className="space-y-8">
       <CustomerHeader
         customerId={params.id}
         displayName={displayName}
         status={customer.status}
       />
 
-      <p className="text-[10px] tracking-caps uppercase text-gold font-medium mb-6">
-        Aktivität · letzte 30 Tage
-      </p>
+      <div className="rounded-3xl border border-white/[0.08] bg-white/[0.03] p-5 sm:p-6">
+        <p className="mb-3 text-[10px] font-medium uppercase tracking-caps text-gold">
+          Aktivität · letzte 30 Tage
+        </p>
+        <h2 className="font-serif text-3xl leading-tight text-bone">
+          Timeline
+        </h2>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-bone-muted">
+          Mahlzeiten, Nachrichten und Workouts chronologisch gebündelt.
+        </p>
+      </div>
 
       <ActivityList
         foodLogs={foodLogs}

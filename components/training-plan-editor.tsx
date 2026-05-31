@@ -257,7 +257,7 @@ export default function TrainingPlanEditor({ customerId, plan }: Props) {
             {plan.days.map((day) => (
               <div
                 key={day.id}
-                className="border border-[#1F1E1A] rounded-xl p-5 bg-[#0E0D10]"
+                className="rounded-3xl border border-white/[0.08] bg-black/20 p-5"
               >
                 <DayEditor
                   day={day}
