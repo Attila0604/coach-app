@@ -83,19 +83,19 @@ export default function TrainingPlanEditor({ customerId, plan }: Props) {
 
   if (!plan) {
     return (
-      <section className="bg-[#0A0A0C] rounded-2xl border border-[#1F1E1A] p-8">
-        <div className="flex items-start justify-between pb-6 border-b border-[#1F1E1A]">
+      <section className="bg-[#10151D] rounded-2xl border border-[#1F2733] p-8">
+        <div className="flex items-start justify-between pb-6 border-b border-[#1F2733]">
           <div>
-            <div className="text-[11px] text-[#5C5A55] tracking-[1.8px] uppercase">
+            <div className="text-[11px] text-[#5E6B7A] tracking-[1.8px] uppercase">
               Trainingsplan
             </div>
-            <div className="text-[22px] font-medium text-[#F5F2EA] mt-1.5 leading-tight">
+            <div className="text-[22px] font-medium text-[#E7ECF2] mt-1.5 leading-tight">
               Noch kein Plan
             </div>
           </div>
         </div>
         <div className="flex flex-col items-center justify-center py-12">
-          <p className="text-[14px] text-[#8E8B83] mb-6 text-center max-w-sm">
+          <p className="text-[14px] text-[#9AA6B4] mb-6 text-center max-w-sm">
             Erstelle den ersten Trainingsplan für diesen Kunden. Du kannst danach
             Tage und Übungen beliebig anpassen.
           </p>
@@ -106,7 +106,7 @@ export default function TrainingPlanEditor({ customerId, plan }: Props) {
                 await createPlan(customerId);
               })
             }
-            className="bg-[#D4AF6C] text-[#1A1308] px-5 py-2.5 rounded-lg text-[12px] font-medium uppercase tracking-[0.5px] hover:bg-[#C7A862] disabled:opacity-50 transition-colors flex items-center gap-2"
+            className="bg-[#8FAAC6] text-[#10151D] px-5 py-2.5 rounded-lg text-[12px] font-medium uppercase tracking-[0.5px] hover:bg-[#7C98B5] disabled:opacity-50 transition-colors flex items-center gap-2"
           >
             <PlusIcon className="w-3.5 h-3.5" />
             Plan erstellen
@@ -118,11 +118,11 @@ export default function TrainingPlanEditor({ customerId, plan }: Props) {
 
   return (
     <>
-      <section className="bg-[#0A0A0C] rounded-2xl border border-[#1F1E1A] p-7 text-[#F5F2EA]">
+      <section className="bg-[#10151D] rounded-2xl border border-[#1F2733] p-7 text-[#E7ECF2]">
         {/* HEADER */}
-        <div className="flex items-start justify-between pb-5 border-b border-[#1F1E1A]">
+        <div className="flex items-start justify-between pb-5 border-b border-[#1F2733]">
           <div>
-            <div className="text-[11px] text-[#5C5A55] tracking-[1.8px] uppercase">
+            <div className="text-[11px] text-[#5E6B7A] tracking-[1.8px] uppercase">
               Trainingsplan
             </div>
             <div className="text-[22px] font-medium mt-1.5 leading-tight">
@@ -229,8 +229,8 @@ export default function TrainingPlanEditor({ customerId, plan }: Props) {
         </div>
 
         {/* TAGE-SECTION-HEADER */}
-        <div className="flex items-center justify-between mt-7 pb-3 border-b border-[#1F1E1A]">
-          <div className="text-[11px] text-[#5C5A55] tracking-[1.8px] uppercase">
+        <div className="flex items-center justify-between mt-7 pb-3 border-b border-[#1F2733]">
+          <div className="text-[11px] text-[#5E6B7A] tracking-[1.8px] uppercase">
             Tage ({plan.days.length})
           </div>
           <button
@@ -240,7 +240,7 @@ export default function TrainingPlanEditor({ customerId, plan }: Props) {
               })
             }
             disabled={isPending}
-            className="px-3 py-1.5 text-[11px] tracking-[1px] uppercase text-[#D4AF6C] hover:bg-[#D4AF6C]/10 border border-[#D4AF6C]/40 rounded flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50 transition-colors"
+            className="px-3 py-1.5 text-[11px] tracking-[1px] uppercase text-[#8FAAC6] hover:bg-[#8FAAC6]/10 border border-[#8FAAC6]/40 rounded flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50 transition-colors"
           >
             <PlusIcon />
             Tag hinzufügen
@@ -249,7 +249,7 @@ export default function TrainingPlanEditor({ customerId, plan }: Props) {
 
         {/* ALL DAYS — RENDERED AS CARDS */}
         {plan.days.length === 0 ? (
-          <p className="text-[14px] text-[#5C5A55] italic py-8 text-center">
+          <p className="text-[14px] text-[#5E6B7A] italic py-8 text-center">
             Noch keine Tage. Klick &ldquo;Tag hinzufügen&rdquo; um zu starten.
           </p>
         ) : (
@@ -257,7 +257,7 @@ export default function TrainingPlanEditor({ customerId, plan }: Props) {
             {plan.days.map((day) => (
               <div
                 key={day.id}
-                className="border border-[#1F1E1A] rounded-xl p-5 bg-[#0E0D10]"
+                className="border border-[#1F2733] rounded-xl p-5 bg-[#0B0F15]"
               >
                 <DayEditor
                   day={day}
@@ -338,27 +338,27 @@ function DuplicateDayDialog({
       onClick={onClose}
     >
       <div
-        className="bg-[#0A0A0C] border border-[#1F1E1A] rounded-2xl p-7 max-w-md w-full"
+        className="bg-[#10151D] border border-[#1F2733] rounded-2xl p-7 max-w-md w-full"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-start justify-between mb-5">
           <div>
-            <div className="text-[11px] text-[#5C5A55] tracking-[1.8px] uppercase">
+            <div className="text-[11px] text-[#5E6B7A] tracking-[1.8px] uppercase">
               Tag duplizieren
             </div>
-            <div className="text-[18px] font-medium text-[#F5F2EA] mt-1.5">
+            <div className="text-[18px] font-medium text-[#E7ECF2] mt-1.5">
               {day.title}
             </div>
             {day.subtitle && (
-              <div className="text-[12px] text-[#8E8B83] mt-1">
+              <div className="text-[12px] text-[#9AA6B4] mt-1">
                 {day.subtitle}
               </div>
             )}
           </div>
           <button
             onClick={onClose}
-            className="text-[#5C5A55] hover:text-[#F5F2EA] p-1 -m-1"
+            className="text-[#5E6B7A] hover:text-[#E7ECF2] p-1 -m-1"
             aria-label="Schließen"
           >
             <XIcon className="w-4 h-4" />
@@ -367,7 +367,7 @@ function DuplicateDayDialog({
 
         {/* Wochentag-Pills */}
         <div className="mb-4">
-          <div className="text-[11px] text-[#5C5A55] tracking-[1.5px] uppercase mb-2">
+          <div className="text-[11px] text-[#5E6B7A] tracking-[1.5px] uppercase mb-2">
             Auf welchen Wochentag?
           </div>
           <div className="flex gap-1.5">
@@ -379,8 +379,8 @@ function DuplicateDayDialog({
                   onClick={() => setWeekday(isActive ? null : d.value)}
                   className={`flex-1 py-2.5 rounded-lg text-[12px] font-medium tracking-[0.5px] uppercase transition-colors ${
                     isActive
-                      ? 'bg-[#D4AF6C] text-[#1A1308]'
-                      : 'bg-[#131215] border border-[#1F1E1A] text-[#8E8B83] hover:border-[#2C2A24] hover:text-[#F5F2EA]'
+                      ? 'bg-[#8FAAC6] text-[#10151D]'
+                      : 'bg-[#161D27] border border-[#1F2733] text-[#9AA6B4] hover:border-[#2A3543] hover:text-[#E7ECF2]'
                   }`}
                   title={d.long}
                 >
@@ -393,19 +393,19 @@ function DuplicateDayDialog({
 
         {/* Uhrzeit */}
         <div className="mb-6">
-          <div className="text-[11px] text-[#5C5A55] tracking-[1.5px] uppercase mb-2">
+          <div className="text-[11px] text-[#5E6B7A] tracking-[1.5px] uppercase mb-2">
             Uhrzeit
           </div>
           <input
             type="time"
             value={timeOfDay}
             onChange={e => setTimeOfDay(e.target.value)}
-            className="w-full bg-[#131215] border border-[#1F1E1A] rounded-lg px-3 py-2.5 text-[14px] text-[#F5F2EA] focus:border-[#D4AF6C] focus:outline-none transition-colors tabular-nums"
+            className="w-full bg-[#161D27] border border-[#1F2733] rounded-lg px-3 py-2.5 text-[14px] text-[#E7ECF2] focus:border-[#8FAAC6] focus:outline-none transition-colors tabular-nums"
           />
         </div>
 
         {/* Übungen-Hinweis */}
-        <div className="text-[11px] text-[#5C5A55] mb-5 flex items-center gap-2">
+        <div className="text-[11px] text-[#5E6B7A] mb-5 flex items-center gap-2">
           <CopyIcon className="w-3 h-3" />
           {day.exercises.length} Übung{day.exercises.length !== 1 ? 'en' : ''} werden mitkopiert
         </div>
@@ -415,14 +415,14 @@ function DuplicateDayDialog({
           <button
             onClick={onClose}
             disabled={isPending}
-            className="px-4 py-2 text-[11px] text-[#8E8B83] uppercase tracking-[0.5px] hover:text-[#F5F2EA] disabled:opacity-50"
+            className="px-4 py-2 text-[11px] text-[#9AA6B4] uppercase tracking-[0.5px] hover:text-[#E7ECF2] disabled:opacity-50"
           >
             Abbrechen
           </button>
           <button
             onClick={handleConfirm}
             disabled={isPending}
-            className="px-5 py-2 bg-[#D4AF6C] text-[#1A1308] text-[11px] font-medium uppercase tracking-[0.5px] rounded-md hover:bg-[#C7A862] disabled:opacity-50"
+            className="px-5 py-2 bg-[#8FAAC6] text-[#10151D] text-[11px] font-medium uppercase tracking-[0.5px] rounded-md hover:bg-[#7C98B5] disabled:opacity-50"
           >
             {isPending ? 'Dupliziert…' : 'Duplizieren'}
           </button>
@@ -502,14 +502,14 @@ function DayEditor({
 
       <div className="mt-6">
         <div className="flex items-baseline justify-between mb-3">
-          <div className="text-[11px] text-[#5C5A55] tracking-[1.8px] uppercase">
+          <div className="text-[11px] text-[#5E6B7A] tracking-[1.8px] uppercase">
             Übungen · {day.exercises.length}
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={onDuplicate}
               disabled={isPending}
-              className="text-[11px] text-[#8E8B83] hover:text-[#D4AF6C] tracking-[0.5px] disabled:opacity-50 flex items-center gap-1.5"
+              className="text-[11px] text-[#9AA6B4] hover:text-[#8FAAC6] tracking-[0.5px] disabled:opacity-50 flex items-center gap-1.5"
             >
               <CopyIcon />
               Tag duplizieren
@@ -519,7 +519,7 @@ function DayEditor({
                 if (confirm(`Tag "${day.title}" wirklich löschen?`)) onDelete();
               }}
               disabled={isPending}
-              className="text-[11px] text-[#5C5A55] hover:text-[#E74C3C] tracking-[0.5px] disabled:opacity-50"
+              className="text-[11px] text-[#5E6B7A] hover:text-[#E74C3C] tracking-[0.5px] disabled:opacity-50"
             >
               Tag löschen
             </button>
@@ -527,7 +527,7 @@ function DayEditor({
         </div>
 
         {day.exercises.length === 0 ? (
-          <p className="text-[12px] text-[#5C5A55] py-4 text-center italic">
+          <p className="text-[12px] text-[#5E6B7A] py-4 text-center italic">
             Noch keine Übungen
           </p>
         ) : (
@@ -554,7 +554,7 @@ function DayEditor({
             })
           }
           disabled={isPending}
-          className="w-full mt-2.5 py-3 border border-dashed border-[#2C2A24] rounded-[10px] flex items-center justify-center gap-2 text-[12px] text-[#D4AF6C] tracking-[0.5px] uppercase hover:border-[#D4AF6C] disabled:opacity-50"
+          className="w-full mt-2.5 py-3 border border-dashed border-[#2A3543] rounded-[10px] flex items-center justify-center gap-2 text-[12px] text-[#8FAAC6] tracking-[0.5px] uppercase hover:border-[#8FAAC6] disabled:opacity-50"
         >
           <PlusIcon />
           Übung hinzufügen
@@ -601,7 +601,7 @@ function ExerciseRow({
   }
 
   return (
-    <div className="flex items-center gap-3 p-3 bg-[#131215] border border-[#1F1E1A] rounded-[10px] hover:border-[#2C2A24] group">
+    <div className="flex items-center gap-3 p-3 bg-[#161D27] border border-[#1F2733] rounded-[10px] hover:border-[#2A3543] group">
       <div className="flex flex-col gap-0.5 -my-1">
         <button
           onClick={() =>
@@ -610,7 +610,7 @@ function ExerciseRow({
             })
           }
           disabled={isPending || isFirst}
-          className="text-[#5C5A55] hover:text-[#D4AF6C] disabled:opacity-20 disabled:cursor-not-allowed p-0.5"
+          className="text-[#5E6B7A] hover:text-[#8FAAC6] disabled:opacity-20 disabled:cursor-not-allowed p-0.5"
           aria-label="Hoch"
         >
           <ArrowUpIcon className="w-3 h-3" />
@@ -622,28 +622,28 @@ function ExerciseRow({
             })
           }
           disabled={isPending || isLast}
-          className="text-[#5C5A55] hover:text-[#D4AF6C] disabled:opacity-20 disabled:cursor-not-allowed p-0.5"
+          className="text-[#5E6B7A] hover:text-[#8FAAC6] disabled:opacity-20 disabled:cursor-not-allowed p-0.5"
           aria-label="Runter"
         >
           <ArrowDownIcon className="w-3 h-3" />
         </button>
       </div>
 
-      <span className="text-[11px] text-[#5C5A55] w-5 tabular-nums">
+      <span className="text-[11px] text-[#5E6B7A] w-5 tabular-nums">
         {String(index).padStart(2, '0')}
       </span>
 
       <span
-        className="text-[13px] text-[#F5F2EA] flex-1 truncate cursor-pointer"
+        className="text-[13px] text-[#E7ECF2] flex-1 truncate cursor-pointer"
         onClick={() => setIsEditing(true)}
       >
         {exercise.name}
       </span>
 
-      <span className="text-[12px] text-[#8E8B83] tabular-nums min-w-[60px]">
+      <span className="text-[12px] text-[#9AA6B4] tabular-nums min-w-[60px]">
         {exercise.sets} × {formatReps(exercise.reps_min, exercise.reps_max)}
       </span>
-      <span className="text-[12px] text-[#D4AF6C] tabular-nums min-w-[50px] text-right">
+      <span className="text-[12px] text-[#8FAAC6] tabular-nums min-w-[50px] text-right">
         {formatWeight(exercise.weight_kg, exercise.weight_type)}
       </span>
 
@@ -655,7 +655,7 @@ function ExerciseRow({
             })
           }
           disabled={isPending}
-          className="text-[#5C5A55] hover:text-[#D4AF6C] disabled:opacity-50 p-1"
+          className="text-[#5E6B7A] hover:text-[#8FAAC6] disabled:opacity-50 p-1"
           aria-label="Übung duplizieren"
           title="Übung duplizieren"
         >
@@ -670,7 +670,7 @@ function ExerciseRow({
             }
           }}
           disabled={isPending}
-          className="text-[#5C5A55] hover:text-[#E74C3C] disabled:opacity-50 p-1"
+          className="text-[#5E6B7A] hover:text-[#E74C3C] disabled:opacity-50 p-1"
           aria-label="Übung löschen"
         >
           <XIcon className="w-3.5 h-3.5" />
@@ -725,24 +725,24 @@ function ExerciseEditForm({
   };
 
   return (
-    <div className="p-4 bg-[#131215] border border-[#D4AF6C] rounded-[10px]">
+    <div className="p-4 bg-[#161D27] border border-[#8FAAC6] rounded-[10px]">
       <div className="flex items-center gap-2 mb-3">
-        <span className="text-[11px] text-[#5C5A55] tabular-nums">
+        <span className="text-[11px] text-[#5E6B7A] tabular-nums">
           {String(index).padStart(2, '0')}
         </span>
-        <span className="text-[11px] text-[#D4AF6C] uppercase tracking-[1px]">
+        <span className="text-[11px] text-[#8FAAC6] uppercase tracking-[1px]">
           Bearbeiten
         </span>
       </div>
 
-      <div className="mb-4 rounded-xl border border-[#D4AF6C]/20 bg-[#D4AF6C]/[0.06] px-3 py-3">
-        <p className="text-[11px] leading-relaxed text-[#8E8B83]">
-          <span className="font-medium text-[#D4AF6C]">Kurz erklärt:</span>{' '}
+      <div className="mb-4 rounded-xl border border-[#8FAAC6]/20 bg-[#8FAAC6]/[0.06] px-3 py-3">
+        <p className="text-[11px] leading-relaxed text-[#9AA6B4]">
+          <span className="font-medium text-[#8FAAC6]">Kurz erklärt:</span>{' '}
           &ldquo;Sätze&rdquo; = Durchgänge, &ldquo;Wdh.&rdquo; = Wiederholungen pro
           Satz, &ldquo;Pause&rdquo; = Erholung zwischen Sätzen. Bei Gewicht bedeutet
-          <span className="text-[#F5F2EA]"> kg</span> ein frei gesetztes
-          Arbeitsgewicht, <span className="text-[#F5F2EA]">Body</span>{' '}
-          Körpergewicht und <span className="text-[#F5F2EA]">Band</span>{' '}
+          <span className="text-[#E7ECF2]"> kg</span> ein frei gesetztes
+          Arbeitsgewicht, <span className="text-[#E7ECF2]">Body</span>{' '}
+          Körpergewicht und <span className="text-[#E7ECF2]">Band</span>{' '}
           Widerstandsband.
         </p>
       </div>
@@ -752,7 +752,7 @@ function ExerciseEditForm({
           <input
             value={name}
             onChange={e => setName(e.target.value)}
-            className="w-full bg-[#0A0A0C] border border-[#2C2A24] rounded-md px-2.5 py-2 text-[13px] text-[#F5F2EA] focus:border-[#D4AF6C] focus:outline-none"
+            className="w-full bg-[#10151D] border border-[#2A3543] rounded-md px-2.5 py-2 text-[13px] text-[#E7ECF2] focus:border-[#8FAAC6] focus:outline-none"
           />
         </EditCell>
         <EditCell label="Sätze">
@@ -762,7 +762,7 @@ function ExerciseEditForm({
             onChange={e => setSets(Number(e.target.value))}
             min={1}
             max={20}
-            className="w-full bg-[#0A0A0C] border border-[#2C2A24] rounded-md px-2.5 py-2 text-[13px] text-[#F5F2EA] tabular-nums focus:border-[#D4AF6C] focus:outline-none"
+            className="w-full bg-[#10151D] border border-[#2A3543] rounded-md px-2.5 py-2 text-[13px] text-[#E7ECF2] tabular-nums focus:border-[#8FAAC6] focus:outline-none"
           />
         </EditCell>
         <EditCell label="Wdh. von">
@@ -771,7 +771,7 @@ function ExerciseEditForm({
             value={repsMin}
             onChange={e => setRepsMin(Number(e.target.value))}
             min={1}
-            className="w-full bg-[#0A0A0C] border border-[#2C2A24] rounded-md px-2.5 py-2 text-[13px] text-[#F5F2EA] tabular-nums focus:border-[#D4AF6C] focus:outline-none"
+            className="w-full bg-[#10151D] border border-[#2A3543] rounded-md px-2.5 py-2 text-[13px] text-[#E7ECF2] tabular-nums focus:border-[#8FAAC6] focus:outline-none"
           />
         </EditCell>
         <EditCell label="Wdh. bis">
@@ -781,7 +781,7 @@ function ExerciseEditForm({
             onChange={e => setRepsMax(e.target.value === '' ? '' : Number(e.target.value))}
             min={Number(repsMin)}
             placeholder="—"
-            className="w-full bg-[#0A0A0C] border border-[#2C2A24] rounded-md px-2.5 py-2 text-[13px] text-[#F5F2EA] tabular-nums focus:border-[#D4AF6C] focus:outline-none"
+            className="w-full bg-[#10151D] border border-[#2A3543] rounded-md px-2.5 py-2 text-[13px] text-[#E7ECF2] tabular-nums focus:border-[#8FAAC6] focus:outline-none"
           />
         </EditCell>
         <EditCell label="Pause (Sek.)">
@@ -793,7 +793,7 @@ function ExerciseEditForm({
             }
             min={0}
             placeholder="—"
-            className="w-full bg-[#0A0A0C] border border-[#2C2A24] rounded-md px-2.5 py-2 text-[13px] text-[#F5F2EA] tabular-nums focus:border-[#D4AF6C] focus:outline-none"
+            className="w-full bg-[#10151D] border border-[#2A3543] rounded-md px-2.5 py-2 text-[13px] text-[#E7ECF2] tabular-nums focus:border-[#8FAAC6] focus:outline-none"
           />
         </EditCell>
       </div>
@@ -809,12 +809,12 @@ function ExerciseEditForm({
               min={0}
               disabled={weightType !== 'kg'}
               placeholder={weightType === 'kg' ? '0' : '—'}
-              className="w-full bg-[#0A0A0C] border border-[#2C2A24] rounded-md px-2.5 py-2 text-[13px] text-[#F5F2EA] tabular-nums focus:border-[#D4AF6C] focus:outline-none disabled:opacity-40"
+              className="w-full bg-[#10151D] border border-[#2A3543] rounded-md px-2.5 py-2 text-[13px] text-[#E7ECF2] tabular-nums focus:border-[#8FAAC6] focus:outline-none disabled:opacity-40"
             />
             <select
               value={weightType}
               onChange={e => setWeightType(e.target.value as WeightType)}
-              className="bg-[#0A0A0C] border border-[#2C2A24] rounded-md px-2 py-2 text-[12px] text-[#F5F2EA] focus:border-[#D4AF6C] focus:outline-none"
+              className="bg-[#10151D] border border-[#2A3543] rounded-md px-2 py-2 text-[12px] text-[#E7ECF2] focus:border-[#8FAAC6] focus:outline-none"
             >
               <option value="kg">kg</option>
               <option value="body">Body</option>
@@ -827,7 +827,7 @@ function ExerciseEditForm({
             value={notes}
             onChange={e => setNotes(e.target.value)}
             placeholder="Hinweis für den Kunden"
-            className="w-full bg-[#0A0A0C] border border-[#2C2A24] rounded-md px-2.5 py-2 text-[12px] text-[#8E8B83] focus:border-[#D4AF6C] focus:outline-none"
+            className="w-full bg-[#10151D] border border-[#2A3543] rounded-md px-2.5 py-2 text-[12px] text-[#9AA6B4] focus:border-[#8FAAC6] focus:outline-none"
           />
         </EditCell>
       </div>
@@ -836,14 +836,14 @@ function ExerciseEditForm({
         <button
           onClick={onClose}
           disabled={isPending}
-          className="px-3 py-1.5 text-[11px] text-[#8E8B83] uppercase tracking-[0.5px] hover:text-[#F5F2EA] disabled:opacity-50"
+          className="px-3 py-1.5 text-[11px] text-[#9AA6B4] uppercase tracking-[0.5px] hover:text-[#E7ECF2] disabled:opacity-50"
         >
           Abbrechen
         </button>
         <button
           onClick={handleSave}
           disabled={isPending}
-          className="px-4 py-1.5 bg-[#D4AF6C] text-[#1A1308] text-[11px] font-medium uppercase tracking-[0.5px] rounded-md hover:bg-[#C7A862] disabled:opacity-50"
+          className="px-4 py-1.5 bg-[#8FAAC6] text-[#10151D] text-[11px] font-medium uppercase tracking-[0.5px] rounded-md hover:bg-[#7C98B5] disabled:opacity-50"
         >
           {isPending ? 'Speichert…' : 'Speichern'}
         </button>
@@ -859,7 +859,7 @@ function ExerciseEditForm({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[11px] text-[#5C5A55] tracking-[1.5px] uppercase mb-1.5">
+      <div className="text-[11px] text-[#5E6B7A] tracking-[1.5px] uppercase mb-1.5">
         {label}
       </div>
       {children}
@@ -870,7 +870,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function EditCell({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[10px] text-[#5C5A55] tracking-[1px] uppercase mb-1">
+      <div className="text-[10px] text-[#5E6B7A] tracking-[1px] uppercase mb-1">
         {label}
       </div>
       {children}
@@ -906,13 +906,13 @@ function TextInput({
         placeholder={placeholder}
         onChange={e => setValue(e.target.value)}
         onBlur={handleBlur}
-        className="w-full bg-[#131215] border border-[#1F1E1A] rounded-lg px-3 py-2.5 pr-10 text-[14px] text-[#F5F2EA] focus:border-[#D4AF6C] focus:outline-none transition-colors"
+        className="w-full bg-[#161D27] border border-[#1F2733] rounded-lg px-3 py-2.5 pr-10 text-[14px] text-[#E7ECF2] focus:border-[#8FAAC6] focus:outline-none transition-colors"
       />
       {saveState === 'saving' && (
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[#8E8B83]">…</span>
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[#9AA6B4]">…</span>
       )}
       {saveState === 'saved' && (
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#D4AF6C]">✓</span>
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#8FAAC6]">✓</span>
       )}
     </div>
   );
@@ -944,7 +944,7 @@ function NumberInput({
   }
 
   return (
-    <div className="flex items-center bg-[#131215] border border-[#1F1E1A] rounded-lg px-3 py-2.5 focus-within:border-[#D4AF6C] transition-colors">
+    <div className="flex items-center bg-[#161D27] border border-[#1F2733] rounded-lg px-3 py-2.5 focus-within:border-[#8FAAC6] transition-colors">
       <input
         type="number"
         value={value}
@@ -952,16 +952,16 @@ function NumberInput({
         max={max}
         onChange={e => setValue(Number(e.target.value))}
         onBlur={handleBlur}
-        className="bg-transparent text-[14px] text-[#F5F2EA] tabular-nums focus:outline-none w-12"
+        className="bg-transparent text-[14px] text-[#E7ECF2] tabular-nums focus:outline-none w-12"
       />
       {suffix && (
-        <span className="text-[14px] text-[#8E8B83] tabular-nums ml-1">{suffix}</span>
+        <span className="text-[14px] text-[#9AA6B4] tabular-nums ml-1">{suffix}</span>
       )}
       {saveState === 'saving' && (
-        <span className="text-[10px] text-[#8E8B83] ml-2">…</span>
+        <span className="text-[10px] text-[#9AA6B4] ml-2">…</span>
       )}
       {saveState === 'saved' && (
-        <span className="text-[12px] text-[#D4AF6C] ml-2">✓</span>
+        <span className="text-[12px] text-[#8FAAC6] ml-2">✓</span>
       )}
     </div>
   );
@@ -993,13 +993,13 @@ function DateInput({
         value={value}
         onChange={e => setValue(e.target.value)}
         onBlur={handleBlur}
-        className="w-full bg-[#131215] border border-[#1F1E1A] rounded-lg px-3 py-2.5 pr-10 text-[14px] text-[#F5F2EA] focus:border-[#D4AF6C] focus:outline-none transition-colors tabular-nums"
+        className="w-full bg-[#161D27] border border-[#1F2733] rounded-lg px-3 py-2.5 pr-10 text-[14px] text-[#E7ECF2] focus:border-[#8FAAC6] focus:outline-none transition-colors tabular-nums"
       />
       {saveState === 'saving' && (
-        <span className="absolute right-10 top-1/2 -translate-y-1/2 text-[10px] text-[#8E8B83]">…</span>
+        <span className="absolute right-10 top-1/2 -translate-y-1/2 text-[10px] text-[#9AA6B4]">…</span>
       )}
       {saveState === 'saved' && (
-        <span className="absolute right-10 top-1/2 -translate-y-1/2 text-[12px] text-[#D4AF6C]">✓</span>
+        <span className="absolute right-10 top-1/2 -translate-y-1/2 text-[12px] text-[#8FAAC6]">✓</span>
       )}
     </div>
   );
@@ -1032,13 +1032,13 @@ function TimeInput({
         value={value}
         onChange={e => setValue(e.target.value)}
         onBlur={handleBlur}
-        className="w-full bg-[#131215] border border-[#1F1E1A] rounded-lg px-3 py-2.5 pr-10 text-[14px] text-[#F5F2EA] focus:border-[#D4AF6C] focus:outline-none transition-colors tabular-nums"
+        className="w-full bg-[#161D27] border border-[#1F2733] rounded-lg px-3 py-2.5 pr-10 text-[14px] text-[#E7ECF2] focus:border-[#8FAAC6] focus:outline-none transition-colors tabular-nums"
       />
       {saveState === 'saving' && (
-        <span className="absolute right-10 top-1/2 -translate-y-1/2 text-[10px] text-[#8E8B83]">…</span>
+        <span className="absolute right-10 top-1/2 -translate-y-1/2 text-[10px] text-[#9AA6B4]">…</span>
       )}
       {saveState === 'saved' && (
-        <span className="absolute right-10 top-1/2 -translate-y-1/2 text-[12px] text-[#D4AF6C]">✓</span>
+        <span className="absolute right-10 top-1/2 -translate-y-1/2 text-[12px] text-[#8FAAC6]">✓</span>
       )}
     </div>
   );
@@ -1057,7 +1057,7 @@ function SelectInput({
     <select
       defaultValue={String(initial)}
       onChange={e => onSave(e.target.value)}
-      className="w-full bg-[#131215] border border-[#1F1E1A] rounded-lg px-3 py-2.5 text-[14px] text-[#F5F2EA] focus:border-[#D4AF6C] focus:outline-none transition-colors"
+      className="w-full bg-[#161D27] border border-[#1F2733] rounded-lg px-3 py-2.5 text-[14px] text-[#E7ECF2] focus:border-[#8FAAC6] focus:outline-none transition-colors"
     >
       {options.map(o => (
         <option key={o.value} value={o.value}>
@@ -1085,8 +1085,8 @@ function WeekdayPills({
             onClick={() => onChange(isActive ? null : day.value)}
             className={`flex-1 py-2.5 rounded-lg text-[12px] font-medium tracking-[0.5px] uppercase transition-colors ${
               isActive
-                ? 'bg-[#D4AF6C] text-[#1A1308]'
-                : 'bg-[#131215] border border-[#1F1E1A] text-[#8E8B83] hover:border-[#2C2A24] hover:text-[#F5F2EA]'
+                ? 'bg-[#8FAAC6] text-[#10151D]'
+                : 'bg-[#161D27] border border-[#1F2733] text-[#9AA6B4] hover:border-[#2A3543] hover:text-[#E7ECF2]'
             }`}
             title={day.long}
           >
@@ -1112,13 +1112,13 @@ function ToggleChip({
       onClick={onToggle}
       className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-[11px] tracking-[0.5px] uppercase transition-colors ${
         active
-          ? 'bg-[#D4AF6C]/10 border border-[#D4AF6C]/40 text-[#D4AF6C]'
-          : 'bg-[#131215] border border-[#1F1E1A] text-[#5C5A55] hover:text-[#8E8B83]'
+          ? 'bg-[#8FAAC6]/10 border border-[#8FAAC6]/40 text-[#8FAAC6]'
+          : 'bg-[#161D27] border border-[#1F2733] text-[#5E6B7A] hover:text-[#9AA6B4]'
       }`}
     >
       <span
         className={`inline-block w-1.5 h-1.5 rounded-full ${
-          active ? 'bg-[#D4AF6C]' : 'bg-[#3C3A35]'
+          active ? 'bg-[#8FAAC6]' : 'bg-[#323D4B]'
         }`}
       />
       {label}
@@ -1128,10 +1128,10 @@ function ToggleChip({
 
 function StatusPill({ status }: { status: TrainingPlan['status'] }) {
   const colors: Record<TrainingPlan['status'], { dot: string; text: string }> = {
-    draft:     { dot: '#8E8B83', text: '#8E8B83' },
-    active:    { dot: '#D4AF6C', text: '#D4AF6C' },
+    draft:     { dot: '#9AA6B4', text: '#9AA6B4' },
+    active:    { dot: '#8FAAC6', text: '#8FAAC6' },
     paused:    { dot: '#E5A14C', text: '#E5A14C' },
-    completed: { dot: '#5C5A55', text: '#5C5A55' },
+    completed: { dot: '#5E6B7A', text: '#5E6B7A' },
   };
   const labels = {
     draft: 'Entwurf',
@@ -1142,7 +1142,7 @@ function StatusPill({ status }: { status: TrainingPlan['status'] }) {
   const c = colors[status];
   return (
     <span
-      className="inline-flex items-center gap-1.5 text-[11px] tracking-[1px] uppercase px-2.5 py-1.5 border border-[#2C2A24] rounded-full"
+      className="inline-flex items-center gap-1.5 text-[11px] tracking-[1px] uppercase px-2.5 py-1.5 border border-[#2A3543] rounded-full"
       style={{ color: c.text }}
     >
       <span
