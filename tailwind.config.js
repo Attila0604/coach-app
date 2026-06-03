@@ -4,34 +4,28 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // RGYM-Stahl-/Silber-Design (Namen beibehalten, Werte umgestellt).
         gold: {
-          DEFAULT: "#d4af76",
-          soft: "#e8c896",
-          deep: "#b88f5d",
-          line: "rgba(212, 175, 118, 0.22)",
+          DEFAULT: "#8FAAC6",
+          soft: "#C9D2DB",
+          deep: "#6E8295",
+          line: "rgba(143, 170, 198, 0.22)",
         },
         ink: {
-          900: "#0a0a09",
-          800: "#0f0e0c",
-          700: "#161410",
-          600: "#1a1916",
+          900: "#0B0F15",
+          800: "#10151D",
+          700: "#161D27",
+          600: "#1B232F",
         },
         bone: {
-          DEFAULT: "#f2ede0",
-          muted: "#9b9588",
-          faint: "#5e5a52",
+          DEFAULT: "#E7ECF2",
+          muted: "#9AA6B4",
+          faint: "#5E6B7A",
         },
       },
       fontFamily: {
-        serif: ["ui-serif", "Georgia", "Cambria", "serif"],
-        sans: [
-          "ui-sans-serif",
-          "system-ui",
-          "-apple-system",
-          "Segoe UI",
-          "Roboto",
-          "sans-serif",
-        ],
+        serif: ["var(--font-serif)", "Oswald", "Impact", "sans-serif"],
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       letterSpacing: {
         caps: "0.22em",
