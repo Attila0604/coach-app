@@ -33,11 +33,9 @@ export default async function CoachLayout({
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-4 sm:gap-6">
             <Link href="/coach" className="group flex items-center gap-3">
-              <span className="grid h-9 w-9 place-items-center rounded-2xl border border-gold/25 bg-gold/10 font-serif text-lg text-gold transition group-hover:border-gold/50">
-                C
-              </span>
+              <img src="/logo.webp" alt="RGYM" className="h-9 w-9" />
               <span className="hidden leading-none sm:block">
-                <span className="block font-serif text-lg text-bone">Coach</span>
+                <span className="block font-serif text-lg text-bone">RGYM</span>
                 <span className="block text-[9px] uppercase tracking-capsTight text-gold">
                   Beta
                 </span>
