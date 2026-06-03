@@ -21,8 +21,9 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center px-6">
       <div className="w-full max-w-md rounded-[2rem] border border-white/[0.08] bg-white/[0.035] p-6 shadow-2xl shadow-black/30 sm:p-8">
         <div className="mb-8 text-center">
+          <img src="/logo.webp" alt="RGYM" className="mx-auto mb-6 h-24 w-24" />
           <p className="mb-3 text-xs uppercase tracking-[0.18em] text-gold">
-            Coach App · Beta
+            RGYM · Beta
           </p>
           <h1 className="mb-2 font-serif text-4xl text-bone">Willkommen</h1>
           <p className="text-sm text-bone-muted">
