@@ -4,7 +4,7 @@
 
 html,
 body {
-  background: radial-gradient(ellipse at top, #1a1916 0%, #0a0a09 60%);
+  background: radial-gradient(ellipse at top, #1B232F 0%, #0B0F15 60%);
   color: rgba(255, 255, 255, 0.92);
   min-height: 100vh;
 }
