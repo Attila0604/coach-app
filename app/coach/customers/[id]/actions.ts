@@ -923,8 +923,38 @@ export async function updateMealPlanMeals(
   return { ok: true };
 }
 
+const PLAN_LANG_NAME: Record<string, string> = {
+  de: "German",
+  it: "Italian",
+  hu: "Hungarian",
+};
+
+// Übersetzt nur die Freitext-Felder eines Mahlzeiten-Plans (name, notes, food)
+// in die Zielsprache. Zahlen, Makros, meal_type und Struktur bleiben unverändert.
+async function translateMealsToLanguage(
+  meals: unknown,
+  targetLang: string
+): Promise<unknown> {
+  const langName = PLAN_LANG_NAME[targetLang];
+  if (!langName) return meals;
+  const system =
+    `You are a precise translator for a fitness and nutrition app. ` +
+    `Translate ONLY the human-readable text fields of this meal-plan JSON into ${langName}. ` +
+    `Translate these fields: each meal's "name", each meal's "notes", and each item's "food". ` +
+    `Do NOT translate or change: "meal_type" values, any numbers (grams, kcal, protein_g, carbs_g, fat_g and all totals), the JSON keys, or the structure. ` +
+    `Keep brand names and proper nouns as they are. ` +
+    `Respond with ONLY the resulting JSON, without markdown fences and without any commentary.`;
+  const raw = await callClaude(
+    [{ role: "user", content: JSON.stringify(meals) }],
+    { model: MEAL_PLAN_MODEL, maxTokens: 4000, temperature: 0, system }
+  );
+  const clean = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
+  return JSON.parse(clean);
+}
+
 export async function publishMealPlan(
-  customerId: string
+  customerId: string,
+  targetLang?: string
 ): Promise<MealPlanResult> {
   if (!customerId) return { ok: false, error: "Kunden-ID fehlt." };
 
@@ -935,12 +965,37 @@ export async function publishMealPlan(
 
   const { data: drafts } = await supabase
     .from("meal_plans")
-    .select("id, plan_date")
+    .select("id, plan_date, meals")
     .eq("customer_id", customerId)
     .eq("status", "draft");
 
   if (!drafts || drafts.length === 0) {
     return { ok: false, error: "Kein Draft-Plan zum Veröffentlichen." };
+  }
+
+  // Optional: Plan-Inhalte in die Sprache des Kunden übersetzen
+  if (targetLang && PLAN_LANG_NAME[targetLang]) {
+    for (const d of drafts) {
+      const row = d as { id: string; meals?: unknown };
+      try {
+        const translated = await translateMealsToLanguage(
+          row.meals ?? [],
+          targetLang
+        );
+        const { error: tErr } = await supabase
+          .from("meal_plans")
+          .update({ meals: translated, updated_at: new Date().toISOString() })
+          .eq("id", row.id);
+        if (tErr) return { ok: false, error: tErr.message };
+      } catch (e) {
+        return {
+          ok: false,
+          error:
+            "Übersetzung fehlgeschlagen: " +
+            (e instanceof Error ? e.message : "Unbekannter Fehler"),
+        };
+      }
+    }
   }
 
   const draftDates = drafts.map((d) => d.plan_date);
