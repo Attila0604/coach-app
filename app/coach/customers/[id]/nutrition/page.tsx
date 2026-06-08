@@ -21,7 +21,7 @@ export default async function CustomerNutritionPage({
     supabase
       .from('customer_profiles')
       .select(
-        'meal_plan_frequency, ai_tips_enabled, meal_plan_via_telegram, daily_kcal_target, protein_target_g, carbs_target_g, fat_target_g'
+        'meal_plan_frequency, ai_tips_enabled, meal_plan_via_telegram, daily_kcal_target, protein_target_g, carbs_target_g, fat_target_g, language'
       )
       .eq('customer_id', params.id)
       .maybeSingle(),
@@ -103,6 +103,7 @@ export default async function CustomerNutritionPage({
             customerId={params.id}
             plans={visiblePlans}
             targets={planTargets}
+            customerLanguage={(profile?.language as string) || 'de'}
           />
         )}
       </div>
