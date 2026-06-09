@@ -1,4 +1,4 @@
-use server';
+'use server';
 
 import { revalidatePath } from 'next/cache';
 import { callClaude } from '@/lib/claude';
@@ -33,7 +33,7 @@ function extractJson(text: string): any {
   try {
     return JSON.parse(text);
   } catch {
-    // fallback below
+    // Weiter unten robuster parsen.
   }
 
   let cleaned = text
@@ -44,7 +44,7 @@ function extractJson(text: string): any {
   try {
     return JSON.parse(cleaned);
   } catch {
-    // fallback below
+    // Weiter unten robuster parsen.
   }
 
   const first = text.indexOf('{');
@@ -56,7 +56,7 @@ function extractJson(text: string): any {
     try {
       return JSON.parse(cleaned);
     } catch {
-      // fallback below
+      // Weiter unten robuster parsen.
     }
 
     const noTrailing = cleaned
@@ -67,7 +67,7 @@ function extractJson(text: string): any {
     try {
       return JSON.parse(noTrailing);
     } catch {
-      // final error below
+      // Finaler Fehler unten.
     }
   }
 
