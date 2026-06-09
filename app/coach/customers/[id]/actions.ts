@@ -1053,6 +1053,100 @@ export async function translatePlans(
   return { ok: true };
 }
 
+export async function translateAndPublish(
+  customerId: string,
+  targetLang: string
+): Promise<MealPlanResult> {
+  if (!customerId) return { ok: false, error: "Kunden-ID fehlt." };
+  if (!targetLang || !PLAN_LANG_NAME[targetLang]) {
+    return { ok: false, error: "Ungültige Sprache." };
+  }
+
+  const auth = await verifyCoachOwnsCustomer(customerId);
+  if (!auth.ok) return auth;
+
+  const supabase = createClient();
+
+  // 1) Arbeitsmenge bestimmen: Entwürfe bevorzugt, sonst die veröffentlichten.
+  let { data: working } = await supabase
+    .from("meal_plans")
+    .select("id, plan_date, meals")
+    .eq("customer_id", customerId)
+    .eq("status", "draft");
+
+  if (!working || working.length === 0) {
+    const res = await supabase
+      .from("meal_plans")
+      .select("id, plan_date, meals")
+      .eq("customer_id", customerId)
+      .eq("status", "published");
+    working = res.data ?? [];
+  }
+
+  if (!working || working.length === 0) {
+    return { ok: false, error: "Kein Plan zum Übersetzen vorhanden." };
+  }
+
+  // 2) Alles zuerst übersetzen (im Speicher) — falls etwas schiefgeht,
+  //    wird die DB gar nicht angefasst.
+  const prepared: { id: string; plan_date: string; meals: unknown }[] = [];
+  for (const r of working) {
+    const row = r as { id: string; plan_date: string; meals?: unknown };
+    try {
+      const translated = await translateMealsToLanguage(
+        row.meals ?? [],
+        targetLang
+      );
+      prepared.push({ id: row.id, plan_date: row.plan_date, meals: translated });
+    } catch (e) {
+      return {
+        ok: false,
+        error:
+          "Übersetzung fehlgeschlagen: " +
+          (e instanceof Error ? e.message : "Unbekannter Fehler"),
+      };
+    }
+  }
+
+  const workingIds = prepared.map((p) => p.id);
+  const minDate = prepared
+    .map((p) => p.plan_date)
+    .reduce((a, b) => (a < b ? a : b));
+
+  // 3) Übersetzte Inhalte speichern
+  for (const p of prepared) {
+    const { error } = await supabase
+      .from("meal_plans")
+      .update({ meals: p.meals, updated_at: new Date().toISOString() })
+      .eq("id", p.id);
+    if (error) return { ok: false, error: error.message };
+  }
+
+  // 4) ALLE Tage ab Wochenstart auf "replaced" setzen (räumt alte Dubletten/
+  //    deutsche Reste weg) ...
+  await supabase
+    .from("meal_plans")
+    .update({ status: "replaced", updated_at: new Date().toISOString() })
+    .eq("customer_id", customerId)
+    .gte("plan_date", minDate);
+
+  // 5) ... und nur die übersetzten Zeilen wieder als "published" setzen.
+  const { error: pubErr } = await supabase
+    .from("meal_plans")
+    .update({ status: "published", updated_at: new Date().toISOString() })
+    .in("id", workingIds);
+  if (pubErr) return { ok: false, error: pubErr.message };
+
+  // 6) Anzeigesprache des Kunden passend setzen (Rahmen + Inhalt einheitlich)
+  await supabase
+    .from("customer_profiles")
+    .update({ language: targetLang })
+    .eq("customer_id", customerId);
+
+  revalidatePath(`/coach/customers/${customerId}`);
+  return { ok: true };
+}
+
 export async function discardMealPlanDraft(
   customerId: string
 ): Promise<MealPlanResult> {
