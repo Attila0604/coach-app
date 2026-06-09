@@ -6,7 +6,7 @@ import {
   publishMealPlan,
   discardMealPlanDraft,
   recalculateMealMacros,
-  translatePlans,
+  translateAndPublish,
 } from "@/app/coach/customers/[id]/actions";
 
 type MealItem = {
@@ -395,20 +395,18 @@ export function WeeklyMealPlanEditor({
     const langName = LANG_LABEL[targetLang] ?? targetLang;
     if (
       !confirm(
-        `Plan-Inhalte nach „${langName}" übersetzen? Die aktuellen Texte (Mahlzeiten, Lebensmittel, Notizen) werden ersetzt.`
+        `Plan nach „${langName}" übersetzen und sofort für den Kunden live setzen? Der Kunde sieht den Plan danach in dieser Sprache.`
       )
     )
       return;
     setError(null);
     setInfo(null);
     startTransition(async () => {
-      const result = await translatePlans(
-        customerId,
-        targetLang,
-        plans.map((p) => p.id)
-      );
+      const result = await translateAndPublish(customerId, targetLang);
       if (result.ok) {
-        setInfo(`Plan nach „${langName}" übersetzt. Der Kunde sieht ihn jetzt in dieser Sprache.`);
+        setInfo(
+          `Plan nach „${langName}" übersetzt und für den Kunden veröffentlicht.`
+        );
       } else {
         setError(result.error);
       }
@@ -637,7 +635,7 @@ export function WeeklyMealPlanEditor({
           disabled={busy}
           className="text-[10px] uppercase tracking-caps font-medium px-4 py-2 border border-white/15 text-bone-muted hover:text-gold hover:border-gold/40 transition disabled:opacity-30"
         >
-          🌐 In diese Sprache übersetzen
+          🌐 Übersetzen & für Kunde live
         </button>
       </div>
 
