@@ -6,6 +6,7 @@ import {
   publishMealPlan,
   discardMealPlanDraft,
   recalculateMealMacros,
+  translatePlans,
 } from "@/app/coach/customers/[id]/actions";
 
 type MealItem = {
@@ -53,7 +54,13 @@ type Props = {
   customerId: string;
   plans: Plan[];
   targets: Targets;
-  customerLanguage: string;
+  customerLanguage?: string;
+};
+
+const LANG_LABEL: Record<string, string> = {
+  de: "Deutsch",
+  it: "Italienisch",
+  hu: "Ungarisch",
 };
 
 const MEAL_TYPE_LABELS: Record<string, string> = {
@@ -147,7 +154,7 @@ export function WeeklyMealPlanEditor({
   targets,
   customerLanguage,
 }: Props) {
-  const [targetLang, setTargetLang] = useState(customerLanguage);
+  const [targetLang, setTargetLang] = useState(customerLanguage ?? "de");
   const [localPlans, setLocalPlans] = useState<Plan[]>(plans);
   const [dirtyDays, setDirtyDays] = useState<Set<string>>(new Set());
   const [activeIdx, setActiveIdx] = useState<number>(0);
@@ -374,9 +381,34 @@ export function WeeklyMealPlanEditor({
     setError(null);
     setInfo(null);
     startTransition(async () => {
-      const result = await publishMealPlan(customerId, targetLang || undefined);
+      const result = await publishMealPlan(customerId);
       if (result.ok) {
         setInfo("Plan veröffentlicht. Kunde sieht ihn jetzt in der App.");
+      } else {
+        setError(result.error);
+      }
+    });
+  }
+
+  function handleTranslate() {
+    if (!targetLang) return;
+    const langName = LANG_LABEL[targetLang] ?? targetLang;
+    if (
+      !confirm(
+        `Plan-Inhalte nach „${langName}" übersetzen? Die aktuellen Texte (Mahlzeiten, Lebensmittel, Notizen) werden ersetzt.`
+      )
+    )
+      return;
+    setError(null);
+    setInfo(null);
+    startTransition(async () => {
+      const result = await translatePlans(
+        customerId,
+        targetLang,
+        plans.map((p) => p.id)
+      );
+      if (result.ok) {
+        setInfo(`Plan nach „${langName}" übersetzt. Der Kunde sieht ihn jetzt in dieser Sprache.`);
       } else {
         setError(result.error);
       }
@@ -584,6 +616,31 @@ export function WeeklyMealPlanEditor({
         </div>
       )}
 
+      {/* Sprache / Übersetzung — immer verfügbar */}
+      <div className="mt-8 pt-6 border-t border-white/[0.06] flex items-center gap-3 flex-wrap">
+        <label className="flex items-center gap-2 text-[10px] uppercase tracking-caps text-bone-muted">
+          Sprache des Kunden
+          <select
+            value={targetLang}
+            onChange={(e) => setTargetLang(e.target.value)}
+            disabled={busy}
+            className="bg-black/40 border border-white/15 text-bone text-[11px] px-2.5 py-2 focus:outline-none focus:border-gold/50 disabled:opacity-30"
+          >
+            <option value="de">Deutsch</option>
+            <option value="it">Italienisch</option>
+            <option value="hu">Ungarisch</option>
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={handleTranslate}
+          disabled={busy}
+          className="text-[10px] uppercase tracking-caps font-medium px-4 py-2 border border-white/15 text-bone-muted hover:text-gold hover:border-gold/40 transition disabled:opacity-30"
+        >
+          🌐 In diese Sprache übersetzen
+        </button>
+      </div>
+
       {/* Footer actions */}
       <div className="mt-8 pt-6 border-t border-white/[0.06] flex items-center justify-between gap-4 flex-wrap">
         {status === "draft" ? (
@@ -596,31 +653,14 @@ export function WeeklyMealPlanEditor({
             >
               Entwurf verwerfen
             </button>
-            <div className="flex items-center gap-3 flex-wrap">
-              <label className="flex items-center gap-2 text-[10px] uppercase tracking-caps text-bone-muted">
-                Sprache
-                <select
-                  value={targetLang}
-                  onChange={(e) => setTargetLang(e.target.value)}
-                  disabled={busy}
-                  className="bg-black/40 border border-white/15 text-bone text-[11px] px-2.5 py-2 focus:outline-none focus:border-gold/50 disabled:opacity-30"
-                  title="Sprache, in der der Plan beim Kunden erscheint"
-                >
-                  <option value="de">Deutsch</option>
-                  <option value="it">Italienisch</option>
-                  <option value="hu">Ungarisch</option>
-                  <option value="">Original (nicht übersetzen)</option>
-                </select>
-              </label>
-              <button
-                type="button"
-                onClick={handlePublish}
-                disabled={busy}
-                className="text-[11px] uppercase tracking-caps font-medium px-5 py-2.5 border border-gold text-gold bg-gold/5 hover:bg-gold/15 transition disabled:opacity-30"
-              >
-                ✓ Plan veröffentlichen
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handlePublish}
+              disabled={busy}
+              className="text-[11px] uppercase tracking-caps font-medium px-5 py-2.5 border border-gold text-gold bg-gold/5 hover:bg-gold/15 transition disabled:opacity-30"
+            >
+              ✓ Plan veröffentlichen
+            </button>
           </>
         ) : (
           <>
