@@ -953,8 +953,7 @@ async function translateMealsToLanguage(
 }
 
 export async function publishMealPlan(
-  customerId: string,
-  targetLang?: string
+  customerId: string
 ): Promise<MealPlanResult> {
   if (!customerId) return { ok: false, error: "Kunden-ID fehlt." };
 
@@ -965,37 +964,12 @@ export async function publishMealPlan(
 
   const { data: drafts } = await supabase
     .from("meal_plans")
-    .select("id, plan_date, meals")
+    .select("id, plan_date")
     .eq("customer_id", customerId)
     .eq("status", "draft");
 
   if (!drafts || drafts.length === 0) {
     return { ok: false, error: "Kein Draft-Plan zum Veröffentlichen." };
-  }
-
-  // Optional: Plan-Inhalte in die Sprache des Kunden übersetzen
-  if (targetLang && PLAN_LANG_NAME[targetLang]) {
-    for (const d of drafts) {
-      const row = d as { id: string; meals?: unknown };
-      try {
-        const translated = await translateMealsToLanguage(
-          row.meals ?? [],
-          targetLang
-        );
-        const { error: tErr } = await supabase
-          .from("meal_plans")
-          .update({ meals: translated, updated_at: new Date().toISOString() })
-          .eq("id", row.id);
-        if (tErr) return { ok: false, error: tErr.message };
-      } catch (e) {
-        return {
-          ok: false,
-          error:
-            "Übersetzung fehlgeschlagen: " +
-            (e instanceof Error ? e.message : "Unbekannter Fehler"),
-        };
-      }
-    }
   }
 
   const draftDates = drafts.map((d) => d.plan_date);
@@ -1014,6 +988,62 @@ export async function publishMealPlan(
     .eq("status", "draft");
 
   if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/coach/customers/${customerId}`);
+  return { ok: true };
+}
+
+// Übersetzt die Inhalte der angegebenen Pläne (egal ob Entwurf oder
+// veröffentlicht) in die Zielsprache – direkt und sofort sichtbar.
+export async function translatePlans(
+  customerId: string,
+  targetLang: string,
+  planIds: string[]
+): Promise<MealPlanResult> {
+  if (!customerId) return { ok: false, error: "Kunden-ID fehlt." };
+  if (!targetLang || !PLAN_LANG_NAME[targetLang]) {
+    return { ok: false, error: "Ungültige Sprache." };
+  }
+  if (!planIds || planIds.length === 0) {
+    return { ok: false, error: "Kein Plan zum Übersetzen." };
+  }
+
+  const auth = await verifyCoachOwnsCustomer(customerId);
+  if (!auth.ok) return auth;
+
+  const supabase = createClient();
+
+  const { data: rows } = await supabase
+    .from("meal_plans")
+    .select("id, customer_id, meals")
+    .in("id", planIds)
+    .eq("customer_id", customerId);
+
+  if (!rows || rows.length === 0) {
+    return { ok: false, error: "Kein passender Plan gefunden." };
+  }
+
+  for (const r of rows) {
+    const row = r as { id: string; meals?: unknown };
+    try {
+      const translated = await translateMealsToLanguage(
+        row.meals ?? [],
+        targetLang
+      );
+      const { error } = await supabase
+        .from("meal_plans")
+        .update({ meals: translated, updated_at: new Date().toISOString() })
+        .eq("id", row.id);
+      if (error) return { ok: false, error: error.message };
+    } catch (e) {
+      return {
+        ok: false,
+        error:
+          "Übersetzung fehlgeschlagen: " +
+          (e instanceof Error ? e.message : "Unbekannter Fehler"),
+      };
+    }
+  }
 
   revalidatePath(`/coach/customers/${customerId}`);
   return { ok: true };
