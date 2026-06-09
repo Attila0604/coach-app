@@ -973,13 +973,17 @@ export async function publishMealPlan(
   }
 
   const draftDates = drafts.map((d) => d.plan_date);
+  // Frühestes Entwurfs-Datum = Wochenstart
+  const minDate = draftDates.reduce((a, b) => (a < b ? a : b));
 
+  // ALLE veröffentlichten Tage ab dem Wochenstart ersetzen (nicht nur exakte
+  // Datums-Treffer) -> verhindert doppelte/zurückbleibende alte "published"-Zeilen
   await supabase
     .from("meal_plans")
     .update({ status: "replaced", updated_at: new Date().toISOString() })
     .eq("customer_id", customerId)
     .eq("status", "published")
-    .in("plan_date", draftDates);
+    .gte("plan_date", minDate);
 
   const { error } = await supabase
     .from("meal_plans")
