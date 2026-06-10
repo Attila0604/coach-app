@@ -51,7 +51,7 @@ export default function TrainingPlanHeader({
   function handleActivate() {
     if (
       !confirm(
-        `Plan "${planName}" aktivieren? Der Kunde sieht den Plan ab sofort in der App.`
+        `Plan "${planName}" für den Kunden freigeben? Der Kunde sieht den Plan ab sofort in der App.`
       )
     )
       return;
@@ -59,7 +59,7 @@ export default function TrainingPlanHeader({
     setInfo(null);
     startTransition(async () => {
       const result = await activateTrainingPlan(planId, customerId);
-      if (result.ok) setInfo('Plan aktiviert. Kunde sieht ihn jetzt.');
+      if (result.ok) setInfo('Plan freigegeben. Kunde sieht ihn jetzt.');
       else setError(result.error);
     });
   }
@@ -111,7 +111,7 @@ export default function TrainingPlanHeader({
 
       {isDraft && (
         <p className="text-[11px] text-gold/70 italic mt-3">
-          Nur du siehst diesen Entwurf. Aktiviere ihn, um ihn dem Kunden in
+          Nur du siehst diesen Entwurf. Gib ihn frei, um ihn dem Kunden in
           der App sichtbar zu machen.
         </p>
       )}
@@ -125,7 +125,7 @@ export default function TrainingPlanHeader({
               disabled={isPending}
               className="text-[11px] uppercase tracking-caps font-medium px-5 py-2.5 border border-gold text-gold bg-gold/5 hover:bg-gold/15 transition disabled:opacity-30"
             >
-              {isPending ? 'Aktiviere …' : '✓ Plan aktivieren'}
+              {isPending ? 'Gebe frei …' : '✓ Für Kunde freigeben'}
             </button>
             <button
               type="button"
