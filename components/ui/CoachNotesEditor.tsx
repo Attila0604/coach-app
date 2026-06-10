@@ -129,7 +129,7 @@ export function CoachNotesEditor({
             disabled={!content.trim() || isPending}
             className="text-[10px] uppercase tracking-caps font-medium px-4 py-2 border border-gold/40 text-gold hover:bg-gold/10 transition disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            {isPending ? "Speichert..." : "Speichern"}
+            {isPending ? "Sendet…" : "An Kunde senden"}
           </button>
         </div>
         {error && (
