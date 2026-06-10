@@ -134,6 +134,13 @@ export default function TrainingPlanEditor({ customerId, plan }: Props) {
             <button
               onClick={() =>
                 startTransition(async () => {
+                  if (
+                    !confirm(
+                      'Trainingsplan in die Sprache des Kunden übersetzen? Die aktuellen Texte (Name, Tage, Übungen) werden dabei durch die Übersetzung ersetzt.'
+                    )
+                  )
+                    return;
+
                   const result = await translateTrainingPlan(plan.id, customerId);
 
                   if (!result.ok) {
