@@ -136,7 +136,7 @@ export default function TrainingPlanEditor({ customerId, plan }: Props) {
                 startTransition(async () => {
                   if (
                     !confirm(
-                      'Trainingsplan in die Sprache des Kunden übersetzen? Die aktuellen Texte (Name, Tage, Übungen) werden dabei durch die Übersetzung ersetzt.'
+                      'Trainingsplan in die Sprache des Kunden übersetzen? Dein deutsches Original bleibt erhalten — der Kunde sieht in der App die Übersetzung.'
                     )
                   )
                     return;
