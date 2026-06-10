@@ -17,6 +17,20 @@ type Profile = {
   notes?: string | null;
 };
 
+type Draft = {
+  age: string;
+  gender: string;
+  height_cm: string;
+  weight_start_kg: string;
+  weight_target_kg: string;
+  goal: string;
+  experience_level: string;
+  equipment: string;
+  allergies: string;
+  food_preferences: string;
+  notes: string;
+};
+
 const GENDER_OPTIONS = [
   { value: '', label: '—' },
   { value: 'm', label: 'Männlich' },
@@ -63,8 +77,19 @@ function textToArr(text: string): string[] {
     .filter(Boolean);
 }
 
+function parseN(s: string): number | null {
+  if (!s.trim()) return null;
+  const v = parseFloat(s.replace(',', '.'));
+  return isFinite(v) ? v : null;
+}
+function parseI(s: string): number | null {
+  if (!s.trim()) return null;
+  const v = parseInt(s, 10);
+  return isFinite(v) ? v : null;
+}
+
 const inputCls =
-  'w-full rounded-xl border border-white/[0.1] bg-white/[0.035] px-3 py-2.5 text-sm text-bone placeholder:text-bone-faint transition focus:border-gold/45 focus:bg-white/[0.055] focus:outline-none disabled:opacity-50';
+  'w-full rounded-xl border border-white/[0.1] bg-white/[0.035] px-3 py-2.5 text-sm text-bone placeholder:text-bone-faint transition focus:border-gold/45 focus:bg-white/[0.055] focus:outline-none';
 
 export function ProfileEditor({
   customerId,
@@ -73,7 +98,7 @@ export function ProfileEditor({
   customerId: string;
   profile: Profile | null;
 }) {
-  const [draft, setDraft] = useState({
+  const [draft, setDraft] = useState<Draft>({
     age: profile?.age?.toString() ?? '',
     gender: profile?.gender ?? '',
     height_cm: profile?.height_cm?.toString() ?? '',
@@ -89,56 +114,69 @@ export function ProfileEditor({
 
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
-  function parseN(s: string): number | null {
-    if (!s.trim()) return null;
-    const v = parseFloat(s.replace(',', '.'));
-    return isFinite(v) ? v : null;
-  }
-  function parseI(s: string): number | null {
-    if (!s.trim()) return null;
-    const v = parseInt(s, 10);
-    return isFinite(v) ? v : null;
-  }
-
-  function handleSave() {
+  // Auto-Save: speichert das komplette Profil beim Verlassen eines Felds.
+  function commit(d: Draft) {
     setError(null);
-    setInfo(null);
-    const updates = {
-      age: parseI(draft.age),
-      gender: draft.gender || null,
-      height_cm: parseI(draft.height_cm),
-      weight_start_kg: parseN(draft.weight_start_kg),
-      weight_target_kg: parseN(draft.weight_target_kg),
-      goal: draft.goal || null,
-      experience_level: draft.experience_level || null,
-      equipment: draft.equipment || null,
-      allergies: textToArr(draft.allergies),
-      food_preferences: textToArr(draft.food_preferences),
-      notes: draft.notes || null,
-    };
     startTransition(async () => {
-      const result = await updateCustomerProfile(customerId, updates);
+      const result = await updateCustomerProfile(customerId, {
+        age: parseI(d.age),
+        gender: d.gender || null,
+        height_cm: parseI(d.height_cm),
+        weight_start_kg: parseN(d.weight_start_kg),
+        weight_target_kg: parseN(d.weight_target_kg),
+        goal: d.goal || null,
+        experience_level: d.experience_level || null,
+        equipment: d.equipment || null,
+        allergies: textToArr(d.allergies),
+        food_preferences: textToArr(d.food_preferences),
+        notes: d.notes || null,
+      });
       if (result.ok) {
-        setInfo('✓ Profil gespeichert');
-        setTimeout(() => setInfo(null), 3000);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
       } else {
         setError(result.error);
       }
     });
   }
 
+  // Text/Zahlenfelder: state aktualisieren, beim Blur speichern.
+  function set(key: keyof Draft, value: string) {
+    setDraft((prev) => ({ ...prev, [key]: value }));
+  }
+  // Selects: state aktualisieren UND sofort speichern (kein Blur nötig).
+  function setAndSave(key: keyof Draft, value: string) {
+    setDraft((prev) => {
+      const next = { ...prev, [key]: value };
+      commit(next);
+      return next;
+    });
+  }
+
   return (
     <div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+      <div className="flex items-center justify-end mb-3 h-4">
+        {isPending ? (
+          <span className="text-[10px] uppercase tracking-caps text-bone-muted">
+            Speichert…
+          </span>
+        ) : saved ? (
+          <span className="text-[10px] uppercase tracking-caps text-gold/80 font-medium">
+            ✓ Gespeichert
+          </span>
+        ) : null}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-2">
         <Field label="Alter">
           <input
             type="text"
             inputMode="numeric"
             value={draft.age}
-            onChange={(e) => setDraft({ ...draft, age: e.target.value })}
-            disabled={isPending}
+            onChange={(e) => set('age', e.target.value)}
+            onBlur={() => commit(draft)}
             placeholder="z.B. 40"
             className={inputCls}
           />
@@ -147,8 +185,7 @@ export function ProfileEditor({
         <Field label="Geschlecht">
           <select
             value={draft.gender}
-            onChange={(e) => setDraft({ ...draft, gender: e.target.value })}
-            disabled={isPending}
+            onChange={(e) => setAndSave('gender', e.target.value)}
             className={inputCls}
           >
             {GENDER_OPTIONS.map((o) => (
@@ -164,8 +201,8 @@ export function ProfileEditor({
             type="text"
             inputMode="numeric"
             value={draft.height_cm}
-            onChange={(e) => setDraft({ ...draft, height_cm: e.target.value })}
-            disabled={isPending}
+            onChange={(e) => set('height_cm', e.target.value)}
+            onBlur={() => commit(draft)}
             placeholder="z.B. 180"
             className={inputCls}
           />
@@ -174,8 +211,7 @@ export function ProfileEditor({
         <Field label="Trainingsziel">
           <select
             value={draft.goal}
-            onChange={(e) => setDraft({ ...draft, goal: e.target.value })}
-            disabled={isPending}
+            onChange={(e) => setAndSave('goal', e.target.value)}
             className={inputCls}
           >
             {GOAL_OPTIONS.map((o) => (
@@ -191,10 +227,8 @@ export function ProfileEditor({
             type="text"
             inputMode="decimal"
             value={draft.weight_start_kg}
-            onChange={(e) =>
-              setDraft({ ...draft, weight_start_kg: e.target.value })
-            }
-            disabled={isPending}
+            onChange={(e) => set('weight_start_kg', e.target.value)}
+            onBlur={() => commit(draft)}
             placeholder="z.B. 69"
             className={inputCls}
           />
@@ -205,10 +239,8 @@ export function ProfileEditor({
             type="text"
             inputMode="decimal"
             value={draft.weight_target_kg}
-            onChange={(e) =>
-              setDraft({ ...draft, weight_target_kg: e.target.value })
-            }
-            disabled={isPending}
+            onChange={(e) => set('weight_target_kg', e.target.value)}
+            onBlur={() => commit(draft)}
             placeholder="z.B. 68"
             className={inputCls}
           />
@@ -217,10 +249,7 @@ export function ProfileEditor({
         <Field label="Erfahrung">
           <select
             value={draft.experience_level}
-            onChange={(e) =>
-              setDraft({ ...draft, experience_level: e.target.value })
-            }
-            disabled={isPending}
+            onChange={(e) => setAndSave('experience_level', e.target.value)}
             className={inputCls}
           >
             {EXPERIENCE_OPTIONS.map((o) => (
@@ -234,8 +263,7 @@ export function ProfileEditor({
         <Field label="Equipment">
           <select
             value={draft.equipment}
-            onChange={(e) => setDraft({ ...draft, equipment: e.target.value })}
-            disabled={isPending}
+            onChange={(e) => setAndSave('equipment', e.target.value)}
             className={inputCls}
           >
             {EQUIPMENT_OPTIONS.map((o) => (
@@ -254,8 +282,8 @@ export function ProfileEditor({
           <input
             type="text"
             value={draft.allergies}
-            onChange={(e) => setDraft({ ...draft, allergies: e.target.value })}
-            disabled={isPending}
+            onChange={(e) => set('allergies', e.target.value)}
+            onBlur={() => commit(draft)}
             placeholder="leer lassen wenn keine"
             className={inputCls}
           />
@@ -269,10 +297,8 @@ export function ProfileEditor({
           <input
             type="text"
             value={draft.food_preferences}
-            onChange={(e) =>
-              setDraft({ ...draft, food_preferences: e.target.value })
-            }
-            disabled={isPending}
+            onChange={(e) => set('food_preferences', e.target.value)}
+            onBlur={() => commit(draft)}
             placeholder="leer lassen wenn keine speziellen"
             className={inputCls}
           />
@@ -285,8 +311,8 @@ export function ProfileEditor({
         >
           <textarea
             value={draft.notes}
-            onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
-            disabled={isPending}
+            onChange={(e) => set('notes', e.target.value)}
+            onBlur={() => commit(draft)}
             placeholder="frei eintragen..."
             rows={3}
             className={`${inputCls} resize-none`}
@@ -294,21 +320,11 @@ export function ProfileEditor({
         </Field>
       </div>
 
-      <button
-        type="button"
-        onClick={handleSave}
-        disabled={isPending}
-        className="w-full text-[11px] uppercase tracking-caps font-medium px-5 py-3 border border-gold text-gold bg-gold/5 hover:bg-gold/15 transition disabled:opacity-30 disabled:cursor-not-allowed"
-      >
-        {isPending ? 'Speichern …' : '✓ Profil speichern'}
-      </button>
+      <p className="text-[10px] text-bone-faint italic mt-4">
+        Änderungen werden automatisch gespeichert.
+      </p>
 
-      {error && (
-        <p className="text-[11px] text-red-400 italic mt-3">{error}</p>
-      )}
-      {info && (
-        <p className="text-[11px] text-gold/80 italic mt-3">{info}</p>
-      )}
+      {error && <p className="text-[11px] text-red-400 italic mt-2">{error}</p>}
     </div>
   );
 }
