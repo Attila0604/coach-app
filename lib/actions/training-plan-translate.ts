@@ -133,6 +133,14 @@ export async function translateTrainingPlan(
   const targetLanguage = normalizeLanguage(profile?.language);
   const targetLabel = languageLabel(targetLanguage);
 
+  if (targetLanguage === 'de') {
+    return {
+      ok: true,
+      message:
+        'Kunde spricht Deutsch — der Plan ist bereits in der richtigen Sprache.',
+    };
+  }
+
   const { data: daysRaw, error: daysErr } = await supabase
     .from('training_days')
     .select('id, day_number, title, subtitle, sort_order')
@@ -242,72 +250,75 @@ ${JSON.stringify(payload)}`;
     parsed.days.map((day: any) => [day.id, day])
   );
 
-  const translatedPlanName = compactText(parsed.plan.name, plan.name).slice(0, 80);
+  const translatedPlanName = compactText(parsed.plan.name, plan.name);
 
-  if (translatedPlanName) {
-    const { error } = await supabase
-      .from('training_plans')
-      .update({
-        name: translatedPlanName,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', planId);
-
-    if (error) {
-      return { ok: false, error: error.message };
-    }
-  }
+  // NICHT-destruktiv: Übersetzung wird in training_plans.translations[lang]
+  // abgelegt. Das deutsche Original (name/title/subtitle/notes) bleibt unberührt.
+  const dayTr: Record<string, { title: string; subtitle: string | null }> = {};
+  const exTr: Record<string, { name: string; notes: string | null }> = {};
 
   for (const day of days) {
     const translatedDay = translatedDays.get(day.id);
 
-    if (!translatedDay) continue;
-
-    const { error: dayUpdateErr } = await supabase
-      .from('training_days')
-      .update({
-        title: compactText(translatedDay.title, day.title).slice(0, 60),
+    if (translatedDay) {
+      dayTr[day.id] = {
+        title: compactText(translatedDay.title, day.title),
         subtitle:
           translatedDay.subtitle == null
             ? null
-            : compactText(translatedDay.subtitle, day.subtitle ?? '').slice(0, 120),
-      })
-      .eq('id', day.id);
-
-    if (dayUpdateErr) {
-      return { ok: false, error: dayUpdateErr.message };
+            : compactText(translatedDay.subtitle, day.subtitle ?? ''),
+      };
     }
 
     const translatedExercises = new Map<string, any>(
-      (Array.isArray(translatedDay.exercises)
-        ? translatedDay.exercises
-        : []
-      ).map((exercise: any) => [exercise.id, exercise])
+      (Array.isArray(translatedDay?.exercises) ? translatedDay.exercises : []).map(
+        (exercise: any) => [exercise.id, exercise]
+      )
     );
 
     for (const exercise of exercisesByDay.get(day.id) ?? []) {
       const translatedExercise = translatedExercises.get(exercise.id);
 
-      if (!translatedExercise) continue;
-
-      const { error: exerciseUpdateErr } = await supabase
-        .from('exercises')
-        .update({
-          name: compactText(translatedExercise.name, exercise.name).slice(0, 80),
+      if (translatedExercise) {
+        exTr[exercise.id] = {
+          name: compactText(translatedExercise.name, exercise.name),
           notes:
             translatedExercise.notes == null
               ? null
-              : compactText(translatedExercise.notes, exercise.notes ?? '').slice(
-                  0,
-                  200
-                ),
-        })
-        .eq('id', exercise.id);
-
-      if (exerciseUpdateErr) {
-        return { ok: false, error: exerciseUpdateErr.message };
+              : compactText(translatedExercise.notes, exercise.notes ?? ''),
+        };
       }
     }
+  }
+
+  const langEntry = {
+    name: translatedPlanName || plan.name,
+    days: dayTr,
+    exercises: exTr,
+  };
+
+  // Bestehende Übersetzungen anderer Sprachen erhalten.
+  const { data: current } = await supabase
+    .from('training_plans')
+    .select('translations')
+    .eq('id', planId)
+    .maybeSingle();
+
+  const merged = {
+    ...((current?.translations as Record<string, unknown> | null) ?? {}),
+    [targetLanguage]: langEntry,
+  };
+
+  const { error: saveErr } = await supabase
+    .from('training_plans')
+    .update({
+      translations: merged,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', planId);
+
+  if (saveErr) {
+    return { ok: false, error: saveErr.message };
   }
 
   revalidatePath(`/customers/${customerId}`);
@@ -315,6 +326,6 @@ ${JSON.stringify(payload)}`;
 
   return {
     ok: true,
-    message: `Trainingsplan wurde nach ${targetLabel} übersetzt.`,
+    message: `Trainingsplan wurde nach ${targetLabel} übersetzt. Dein deutsches Original bleibt erhalten.`,
   };
 }
