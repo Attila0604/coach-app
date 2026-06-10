@@ -79,14 +79,14 @@ export default async function TrainingPlanSection({
         />
       </TrainingPlanGeneratorToggle>
 
-      {/* AUTO-SAVE HINWEIS — anders als Profil/Ernährung mit Speichern-Button */}
+      {/* AUTO-SAVE HINWEIS — gilt jetzt einheitlich in der ganzen App */}
       <div className="rounded-2xl border border-gold/20 bg-gold/[0.06] px-5 py-4">
         <p className="text-[12px] text-bone leading-relaxed">
           <span className="font-medium text-gold">ℹ️ Auto-Save aktiv</span>
           <span className="text-bone-muted">
-            {' '}— Anders als bei Profil und Ernährung werden Änderungen hier
-            automatisch gespeichert, sobald du das Feld verlässt.
-            Das <span className="text-gold font-medium">✓</span> Symbol bestätigt das Speichern.
+            {' '}— Änderungen werden automatisch gespeichert, sobald du das Feld
+            verlässt. Das <span className="text-gold font-medium">✓</span> Symbol
+            bestätigt das Speichern.
           </span>
         </p>
       </div>
