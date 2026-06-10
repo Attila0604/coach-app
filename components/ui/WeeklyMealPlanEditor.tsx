@@ -367,13 +367,13 @@ export function WeeklyMealPlanEditor({
     if (dirtyDays.size > 0) {
       if (
         !confirm(
-          "Es gibt ungespeicherte Änderungen. Trotzdem veröffentlichen? (Ungespeicherte Änderungen gehen verloren.)"
+          "Es gibt ungespeicherte Änderungen. Trotzdem freigeben? (Ungespeicherte Änderungen gehen verloren.)"
         )
       )
         return;
     } else if (
       !confirm(
-        "Plan jetzt veröffentlichen? Der Kunde sieht den Plan sofort in der App."
+        "Plan jetzt für den Kunden freigeben? Der Kunde sieht den Plan sofort in der App."
       )
     ) {
       return;
@@ -383,7 +383,7 @@ export function WeeklyMealPlanEditor({
     startTransition(async () => {
       const result = await publishMealPlan(customerId);
       if (result.ok) {
-        setInfo("Plan veröffentlicht. Kunde sieht ihn jetzt in der App.");
+        setInfo("Plan freigegeben. Kunde sieht ihn jetzt in der App.");
       } else {
         setError(result.error);
       }
@@ -635,7 +635,7 @@ export function WeeklyMealPlanEditor({
           disabled={busy}
           className="text-[10px] uppercase tracking-caps font-medium px-4 py-2 border border-white/15 text-bone-muted hover:text-gold hover:border-gold/40 transition disabled:opacity-30"
         >
-          🌐 Übersetzen & für Kunde live
+          🌐 Übersetzen & freigeben
         </button>
       </div>
 
@@ -657,13 +657,13 @@ export function WeeklyMealPlanEditor({
               disabled={busy}
               className="text-[11px] uppercase tracking-caps font-medium px-5 py-2.5 border border-gold text-gold bg-gold/5 hover:bg-gold/15 transition disabled:opacity-30"
             >
-              ✓ Plan veröffentlichen
+              ✓ Für Kunde freigeben
             </button>
           </>
         ) : (
           <>
             <p className="text-[11px] text-bone-faint italic">
-              Plan ist veröffentlicht. Änderungen werden direkt für den Kunden sichtbar.
+              Plan ist freigegeben. Änderungen werden direkt für den Kunden sichtbar.
             </p>
             <span className="text-[10px] uppercase tracking-caps text-gold/70 font-medium">
               Live
@@ -694,7 +694,7 @@ function StatusPill({ status }: { status: "draft" | "published" }) {
           : "border-bone/30 text-bone bg-white/[0.02]"
       }`}
     >
-      {isDraft ? "Entwurf" : "Veröffentlicht"}
+      {isDraft ? "Entwurf" : "Freigegeben"}
     </span>
   );
 }
