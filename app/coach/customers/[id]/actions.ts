@@ -1017,9 +1017,11 @@ export async function translatePlans(
 
   const supabase = createClient();
 
+  if (targetLang === "de") return { ok: true };
+
   const { data: rows } = await supabase
     .from("meal_plans")
-    .select("id, customer_id, meals")
+    .select("id, customer_id, meals, translations")
     .in("id", planIds)
     .eq("customer_id", customerId);
 
@@ -1028,15 +1030,24 @@ export async function translatePlans(
   }
 
   for (const r of rows) {
-    const row = r as { id: string; meals?: unknown };
+    const row = r as {
+      id: string;
+      meals?: unknown;
+      translations?: Record<string, unknown> | null;
+    };
     try {
       const translated = await translateMealsToLanguage(
         row.meals ?? [],
         targetLang
       );
+      // NICHT-destruktiv: Original (meals=Deutsch) bleibt, Übersetzung -> translations[lang].
+      const merged = {
+        ...((row.translations as Record<string, unknown> | null) ?? {}),
+        [targetLang]: translated,
+      };
       const { error } = await supabase
         .from("meal_plans")
-        .update({ meals: translated, updated_at: new Date().toISOString() })
+        .update({ translations: merged, updated_at: new Date().toISOString() })
         .eq("id", row.id);
       if (error) return { ok: false, error: error.message };
     } catch (e) {
@@ -1070,14 +1081,14 @@ export async function translateAndPublish(
   // 1) Arbeitsmenge bestimmen: Entwürfe bevorzugt, sonst die veröffentlichten.
   let { data: working } = await supabase
     .from("meal_plans")
-    .select("id, plan_date, meals")
+    .select("id, plan_date, meals, translations")
     .eq("customer_id", customerId)
     .eq("status", "draft");
 
   if (!working || working.length === 0) {
     const res = await supabase
       .from("meal_plans")
-      .select("id, plan_date, meals")
+      .select("id, plan_date, meals, translations")
       .eq("customer_id", customerId)
       .eq("status", "published");
     working = res.data ?? [];
@@ -1089,15 +1100,32 @@ export async function translateAndPublish(
 
   // 2) Alles zuerst übersetzen (im Speicher) — falls etwas schiefgeht,
   //    wird die DB gar nicht angefasst.
-  const prepared: { id: string; plan_date: string; meals: unknown }[] = [];
+  const prepared: {
+    id: string;
+    plan_date: string;
+    transUpdate: Record<string, unknown> | null;
+  }[] = [];
   for (const r of working) {
-    const row = r as { id: string; plan_date: string; meals?: unknown };
+    const row = r as {
+      id: string;
+      plan_date: string;
+      meals?: unknown;
+      translations?: Record<string, unknown> | null;
+    };
     try {
-      const translated = await translateMealsToLanguage(
-        row.meals ?? [],
-        targetLang
-      );
-      prepared.push({ id: row.id, plan_date: row.plan_date, meals: translated });
+      // Deutsch braucht keine Übersetzung (Leser fällt auf meals zurück).
+      let transUpdate: Record<string, unknown> | null = null;
+      if (targetLang !== "de") {
+        const translated = await translateMealsToLanguage(
+          row.meals ?? [],
+          targetLang
+        );
+        transUpdate = {
+          ...((row.translations as Record<string, unknown> | null) ?? {}),
+          [targetLang]: translated,
+        };
+      }
+      prepared.push({ id: row.id, plan_date: row.plan_date, transUpdate });
     } catch (e) {
       return {
         ok: false,
@@ -1113,11 +1141,13 @@ export async function translateAndPublish(
     .map((p) => p.plan_date)
     .reduce((a, b) => (a < b ? a : b));
 
-  // 3) Übersetzte Inhalte speichern
+  // 3) Übersetzte Inhalte speichern — NICHT-destruktiv in translations[lang].
+  //    Das deutsche Original in meals bleibt unangetastet.
   for (const p of prepared) {
+    if (!p.transUpdate) continue; // 'de' -> kein Übersetzungs-Write nötig
     const { error } = await supabase
       .from("meal_plans")
-      .update({ meals: p.meals, updated_at: new Date().toISOString() })
+      .update({ translations: p.transUpdate, updated_at: new Date().toISOString() })
       .eq("id", p.id);
     if (error) return { ok: false, error: error.message };
   }
