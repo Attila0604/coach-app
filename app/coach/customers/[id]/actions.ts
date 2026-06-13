@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase-server";
 import { revalidatePath } from "next/cache";
 import { callClaude } from "@/lib/claude";
+import { pushMealPlanViaTelegram } from "@/lib/push";
 
 // ============================================================
 // GOALS
@@ -993,6 +994,10 @@ export async function publishMealPlan(
 
   if (error) return { ok: false, error: error.message };
 
+  // Optional: Plan per Telegram an den Kunden pushen (Bot entscheidet anhand
+  // des Flags meal_plan_via_telegram). Best-effort, blockiert die Freigabe nicht.
+  await pushMealPlanViaTelegram(customerId);
+
   revalidatePath(`/coach/customers/${customerId}`);
   return { ok: true };
 }
@@ -1172,6 +1177,9 @@ export async function translateAndPublish(
     .from("customer_profiles")
     .update({ language: targetLang })
     .eq("customer_id", customerId);
+
+  // 7) Optional: Plan per Telegram pushen (Bot prüft meal_plan_via_telegram).
+  await pushMealPlanViaTelegram(customerId);
 
   revalidatePath(`/coach/customers/${customerId}`);
   return { ok: true };
