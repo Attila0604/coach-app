@@ -953,6 +953,45 @@ async function translateMealsToLanguage(
   return JSON.parse(clean);
 }
 
+// Übersetzt die ganze Woche in EINEM Aufruf. Eingabe/Ausgabe: Objekt das
+// plan-IDs auf meals-Arrays abbildet. Wirft bei fehlenden IDs (-> Fallback).
+async function translateMealsBatchToLanguage(
+  byId: Record<string, unknown>,
+  targetLang: string
+): Promise<Record<string, unknown>> {
+  const langName = PLAN_LANG_NAME[targetLang];
+  if (!langName) return byId;
+
+  const ids = Object.keys(byId);
+  if (ids.length === 0) return {};
+
+  const system =
+    `You are a precise translator for a fitness and nutrition app. ` +
+    `The input is a JSON object mapping plan IDs to meal arrays for several days. ` +
+    `Translate ONLY the human-readable text fields into ${langName}: each meal's "name", each meal's "notes", and each item's "food". ` +
+    `Do NOT translate or change: "meal_type" values, any numbers (grams, kcal, protein_g, carbs_g, fat_g and all totals), the JSON keys, the plan IDs, or the structure. ` +
+    `Keep brand names and proper nouns as they are. ` +
+    `Return the SAME object with the SAME keys (plan IDs), each mapping to its translated meal array. ` +
+    `Respond with ONLY the resulting JSON, without markdown fences and without any commentary.`;
+
+  const raw = await callClaude([{ role: "user", content: JSON.stringify(byId) }], {
+    model: MEAL_PLAN_MODEL,
+    maxTokens: 8000,
+    temperature: 0,
+    system,
+  });
+  const clean = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
+  const parsed = JSON.parse(clean) as Record<string, unknown>;
+
+  // Sicherheits-Check: jede ID muss zurückkommen, sonst Fallback auslösen.
+  for (const id of ids) {
+    if (!(id in parsed)) {
+      throw new Error("Batch-Übersetzung unvollständig (fehlende ID).");
+    }
+  }
+  return parsed;
+}
+
 export async function publishMealPlan(
   customerId: string
 ): Promise<MealPlanResult> {
@@ -1105,39 +1144,59 @@ export async function translateAndPublish(
 
   // 2) Alles zuerst übersetzen (im Speicher) — falls etwas schiefgeht,
   //    wird die DB gar nicht angefasst.
+  type WorkingRow = {
+    id: string;
+    plan_date: string;
+    meals?: unknown;
+    translations?: Record<string, unknown> | null;
+  };
+  const rows = working as WorkingRow[];
+
   const prepared: {
     id: string;
     plan_date: string;
     transUpdate: Record<string, unknown> | null;
   }[] = [];
-  for (const r of working) {
-    const row = r as {
-      id: string;
-      plan_date: string;
-      meals?: unknown;
-      translations?: Record<string, unknown> | null;
-    };
+
+  if (targetLang === "de") {
+    // Deutsch braucht keine Übersetzung (Leser fällt auf meals zurück).
+    for (const row of rows) {
+      prepared.push({ id: row.id, plan_date: row.plan_date, transUpdate: null });
+    }
+  } else {
+    // Ganze Woche in EINEM KI-Aufruf übersetzen (statt pro Tag = viel schneller).
+    const byId: Record<string, unknown> = {};
+    for (const row of rows) byId[row.id] = row.meals ?? [];
+
+    let translatedById: Record<string, unknown>;
     try {
-      // Deutsch braucht keine Übersetzung (Leser fällt auf meals zurück).
-      let transUpdate: Record<string, unknown> | null = null;
-      if (targetLang !== "de") {
-        const translated = await translateMealsToLanguage(
-          row.meals ?? [],
-          targetLang
-        );
-        transUpdate = {
-          ...((row.translations as Record<string, unknown> | null) ?? {}),
-          [targetLang]: translated,
+      translatedById = await translateMealsBatchToLanguage(byId, targetLang);
+    } catch {
+      // Fallback: Tag für Tag (langsamer, aber robust), falls der Batch scheitert.
+      translatedById = {};
+      try {
+        for (const row of rows) {
+          translatedById[row.id] = await translateMealsToLanguage(
+            row.meals ?? [],
+            targetLang
+          );
+        }
+      } catch (e) {
+        return {
+          ok: false,
+          error:
+            "Übersetzung fehlgeschlagen: " +
+            (e instanceof Error ? e.message : "Unbekannter Fehler"),
         };
       }
-      prepared.push({ id: row.id, plan_date: row.plan_date, transUpdate });
-    } catch (e) {
-      return {
-        ok: false,
-        error:
-          "Übersetzung fehlgeschlagen: " +
-          (e instanceof Error ? e.message : "Unbekannter Fehler"),
+    }
+
+    for (const row of rows) {
+      const merged = {
+        ...((row.translations as Record<string, unknown> | null) ?? {}),
+        [targetLang]: translatedById[row.id],
       };
+      prepared.push({ id: row.id, plan_date: row.plan_date, transUpdate: merged });
     }
   }
 
