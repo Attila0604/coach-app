@@ -40,29 +40,10 @@ export async function updateGoals(
     updated_at: new Date().toISOString(),
   };
 
+  const auth = await verifyCoachOwnsCustomer(customerId);
+  if (!auth.ok) return auth;
+
   const supabase = createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Nicht eingeloggt." };
-
-  const { data: coach } = await supabase
-    .from("coaches")
-    .select("id")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (!coach) return { ok: false, error: "Kein Coach-Konto gefunden." };
-
-  const { data: customer } = await supabase
-    .from("customers")
-    .select("id")
-    .eq("id", customerId)
-    .eq("coach_id", coach.id)
-    .maybeSingle();
-  if (!customer) {
-    return { ok: false, error: "Kunde nicht gefunden oder keine Berechtigung." };
-  }
 
   const { error } = await supabase
     .from("customer_profiles")
