@@ -8,3 +8,21 @@ body {
   color: rgba(255, 255, 255, 0.92);
   min-height: 100vh;
 }
+
+/* Native Steuerelemente dunkel rendern (Dropdown-Popups, Date-Picker, Scrollbars),
+   damit nichts mehr weiß aufpoppt. */
+html {
+  color-scheme: dark;
+}
+
+/* Aufgeklappte <select>-Listen ans dunkle Design angleichen. */
+select option,
+select optgroup {
+  background-color: #131a24;
+  color: rgba(255, 255, 255, 0.92);
+}
+select option:checked,
+select option:hover {
+  background-color: #1f2937;
+  color: #ffffff;
+}
