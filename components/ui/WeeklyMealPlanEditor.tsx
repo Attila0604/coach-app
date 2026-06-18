@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   updateMealPlanMeals,
   publishMealPlan,
@@ -162,6 +162,10 @@ export function WeeklyMealPlanEditor({
   const [info, setInfo] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [isRecalcing, setIsRecalcing] = useState(false);
+  const [autoSaveState, setAutoSaveState] = useState<"idle" | "saving" | "saved">(
+    "idle"
+  );
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const status: "draft" | "published" =
     plans.every((p) => p.status === "draft") ? "draft" : "published";
@@ -329,9 +333,7 @@ export function WeeklyMealPlanEditor({
           )
         );
         setDirtyDays((prev) => new Set(prev).add(activePlan.id));
-        setInfo(
-          "KI hat Makros aktualisiert. Jetzt prüfen und mit 'Tag speichern' sichern."
-        );
+        setInfo("KI hat Makros aktualisiert (wird automatisch gespeichert).");
       } else {
         setError(result.error);
       }
@@ -340,38 +342,48 @@ export function WeeklyMealPlanEditor({
     }
   }
 
-  function handleSaveDay() {
-    setError(null);
-    setInfo(null);
-    const planToSave = activePlan;
-    startTransition(async () => {
-      const result = await updateMealPlanMeals(
-        planToSave.id,
-        customerId,
-        planToSave.meals
-      );
-      if (result.ok) {
-        setDirtyDays((prev) => {
-          const next = new Set(prev);
-          next.delete(planToSave.id);
-          return next;
-        });
-        setInfo(`${weekdayShort(planToSave.plan_date)} gespeichert.`);
-      } else {
+  // Speichert alle Tage mit ungespeicherten Änderungen. false = Fehler.
+  async function flushDirtyDays(): Promise<boolean> {
+    const toSave = localPlans.filter((p) => dirtyDays.has(p.id));
+    for (const p of toSave) {
+      const result = await updateMealPlanMeals(p.id, customerId, p.meals);
+      if (!result.ok) {
         setError(result.error);
+        return false;
       }
-    });
+      setDirtyDays((prev) => {
+        const next = new Set(prev);
+        next.delete(p.id);
+        return next;
+      });
+    }
+    return true;
   }
 
+  // Auto-Save: geänderte Tage automatisch speichern (debounced) — kein Knopf mehr.
+  useEffect(() => {
+    if (dirtyDays.size === 0 || busy) return;
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => {
+      setAutoSaveState("saving");
+      startTransition(async () => {
+        const ok = await flushDirtyDays();
+        if (ok) {
+          setAutoSaveState("saved");
+          setTimeout(() => setAutoSaveState("idle"), 1500);
+        } else {
+          setAutoSaveState("idle");
+        }
+      });
+    }, 1000);
+    return () => {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirtyDays, localPlans, busy]);
+
   function handlePublish() {
-    if (dirtyDays.size > 0) {
-      if (
-        !confirm(
-          "Es gibt ungespeicherte Änderungen. Trotzdem freigeben? (Ungespeicherte Änderungen gehen verloren.)"
-        )
-      )
-        return;
-    } else if (
+    if (
       !confirm(
         "Plan jetzt für den Kunden freigeben? Der Kunde sieht den Plan sofort in der App."
       )
@@ -381,6 +393,7 @@ export function WeeklyMealPlanEditor({
     setError(null);
     setInfo(null);
     startTransition(async () => {
+      if (!(await flushDirtyDays())) return;
       const result = await publishMealPlan(customerId);
       if (result.ok) {
         setInfo("Plan freigegeben. Kunde sieht ihn jetzt in der App.");
@@ -402,6 +415,7 @@ export function WeeklyMealPlanEditor({
     setError(null);
     setInfo(null);
     startTransition(async () => {
+      if (!(await flushDirtyDays())) return;
       const result = await translateAndPublish(customerId, targetLang);
       if (result.ok) {
         setInfo(
@@ -578,71 +592,47 @@ export function WeeklyMealPlanEditor({
             + Mahlzeit hinzufügen
           </button>
 
-          {/* Per-day save bar */}
+          {/* Per-day status bar (Auto-Save) */}
           <div className="mt-6 pt-5 border-t border-white/[0.06] flex items-center justify-between gap-3 flex-wrap">
             <div className="text-[11px] text-bone-faint italic">
               {isRecalcing
                 ? "⏳ KI berechnet Makros…"
-                : dirtyDays.has(activePlan.id)
-                ? "Ungespeicherte Änderungen für diesen Tag."
-                : "Keine Änderungen."}
+                : dirtyDays.size > 0 || autoSaveState === "saving"
+                ? "Speichert automatisch…"
+                : autoSaveState === "saved"
+                ? "✓ Gespeichert"
+                : "Alle Änderungen gespeichert"}
             </div>
-            <div className="flex gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={handleRecalcDay}
-                disabled={busy || activePlan.meals.length === 0}
-                className="text-[10px] uppercase tracking-caps font-medium px-3 py-2 border border-white/15 text-bone-muted hover:text-gold hover:border-gold/40 transition disabled:opacity-30 disabled:cursor-not-allowed"
-                title="KI berechnet kcal/Protein/Carbs/Fett pro Item basierend auf Name + Gramm"
-              >
-                {isRecalcing ? "⏳ KI rechnet…" : "🔄 KI nachrechnen"}
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveDay}
-                disabled={busy || !dirtyDays.has(activePlan.id)}
-                className={`text-[10px] uppercase tracking-caps font-medium px-4 py-2 border transition ${
-                  dirtyDays.has(activePlan.id) && !busy
-                    ? "border-gold/60 text-gold hover:bg-gold/10"
-                    : "border-white/10 text-bone-faint cursor-not-allowed"
-                }`}
-              >
-                {isPending ? "Speichere…" : "Tag speichern"}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleRecalcDay}
+              disabled={busy || activePlan.meals.length === 0}
+              className="text-[10px] uppercase tracking-caps font-medium px-3 py-2 border border-white/15 text-bone-muted hover:text-gold hover:border-gold/40 transition disabled:opacity-30 disabled:cursor-not-allowed"
+              title="KI berechnet kcal/Protein/Carbs/Fett pro Item basierend auf Name + Gramm"
+            >
+              {isRecalcing ? "⏳ KI rechnet…" : "🔄 KI nachrechnen"}
+            </button>
           </div>
         </div>
       )}
 
-      {/* Sprache / Übersetzung — immer verfügbar */}
-      <div className="mt-8 pt-6 border-t border-white/[0.06] flex items-center gap-3 flex-wrap">
-        <label className="flex items-center gap-2 text-[10px] uppercase tracking-caps text-bone-muted">
-          Sprache des Kunden
-          <select
-            value={targetLang}
-            onChange={(e) => setTargetLang(e.target.value)}
-            disabled={busy}
-            className="bg-black/40 border border-white/15 text-bone text-[11px] px-2.5 py-2 focus:outline-none focus:border-gold/50 disabled:opacity-30"
-          >
-            <option value="de">Deutsch</option>
-            <option value="it">Italienisch</option>
-            <option value="hu">Ungarisch</option>
-          </select>
-        </label>
-        <button
-          type="button"
-          onClick={handleTranslate}
-          disabled={busy}
-          className="text-[10px] uppercase tracking-caps font-medium px-4 py-2 border border-white/15 text-bone-muted hover:text-gold hover:border-gold/40 transition disabled:opacity-30"
-        >
-          🌐 Übersetzen & freigeben
-        </button>
-      </div>
-
-      {/* Footer actions */}
+      {/* Sprache + EIN Freigeben-Knopf (richtet sich nach der Kundensprache) */}
       <div className="mt-8 pt-6 border-t border-white/[0.06] flex items-center justify-between gap-4 flex-wrap">
-        {status === "draft" ? (
-          <>
+        <div className="flex items-center gap-3 flex-wrap">
+          <label className="flex items-center gap-2 text-[10px] uppercase tracking-caps text-bone-muted">
+            Sprache des Kunden
+            <select
+              value={targetLang}
+              onChange={(e) => setTargetLang(e.target.value)}
+              disabled={busy}
+              className="bg-black/40 border border-white/15 text-bone text-[11px] px-2.5 py-2 focus:outline-none focus:border-gold/50 disabled:opacity-30"
+            >
+              <option value="de">Deutsch</option>
+              <option value="it">Italienisch</option>
+              <option value="hu">Ungarisch</option>
+            </select>
+          </label>
+          {status === "draft" ? (
             <button
               type="button"
               onClick={handleDiscard}
@@ -651,25 +641,22 @@ export function WeeklyMealPlanEditor({
             >
               Entwurf verwerfen
             </button>
-            <button
-              type="button"
-              onClick={handlePublish}
-              disabled={busy}
-              className="text-[11px] uppercase tracking-caps font-medium px-5 py-2.5 border border-gold text-gold bg-gold/5 hover:bg-gold/15 transition disabled:opacity-30"
-            >
-              ✓ Für Kunde freigeben
-            </button>
-          </>
-        ) : (
-          <>
-            <p className="text-[11px] text-bone-faint italic">
-              Plan ist freigegeben. Änderungen werden direkt für den Kunden sichtbar.
-            </p>
+          ) : (
             <span className="text-[10px] uppercase tracking-caps text-gold/70 font-medium">
-              Live
+              ● Live
             </span>
-          </>
-        )}
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={targetLang === "de" ? handlePublish : handleTranslate}
+          disabled={busy}
+          className="text-[11px] uppercase tracking-caps font-medium px-5 py-2.5 border border-gold text-gold bg-gold/5 hover:bg-gold/15 transition disabled:opacity-30"
+        >
+          {targetLang === "de"
+            ? "✓ Für Kunde freigeben"
+            : "🌐 Übersetzen & freigeben"}
+        </button>
       </div>
 
       {error && (
